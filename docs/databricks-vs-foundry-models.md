@@ -41,7 +41,7 @@ Foundry 직접이 **홉(hop)이 적고**, Azure 네트워크 정책과 일관성
 
 | 항목 | 현재 | Foundry 직접 |
 | --- | --- | --- |
-| 메트릭 | Serving UI Metrics + `system.serving.endpoint_usage` | **Azure Monitor Metrics** + Foundry Tracing (OpenTelemetry) |
+| 메트릭 | 인프라 헬스 메트릭은 엔드포인트 상세 페이지에 자동(주로 Custom/Provisioned). Pay-per-token Foundation Model API는 별도 빌트인 대시보드(AI Gateway → Create/View Dashboard) 또는 시스템 테이블(`system.ai_gateway.usage`, `system.serving.endpoint_usage`) 조회 필요 | **Azure Monitor Metrics** + Foundry Tracing (OpenTelemetry) |
 | 로그 | Databricks Inference Tables (Delta) | Diagnostic Settings → Log Analytics / Storage |
 | 분산 추적 | 별도 구성 | **Agent Framework + Foundry Tracing** 네이티브 |
 | 콘텐츠 안전 로그 | AI Gateway에서 별도 설정 | Content Safety가 Foundry에 기본 내장 |
@@ -106,14 +106,15 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 
 | 용도 | 추가로 필요한 리소스 | 활성화 위치 | 비용 모델 | 실무 체감 비용 |
 | --- | --- | --- | --- | --- |
-| 엔드포인트 메트릭 (UI 차트) | 없음 — 기본 제공 | Serving → 엔드포인트 → Metrics 탭 | **무료** | 0 |
+| 엔드포인트 요청/토큰 대시보드 | **AI Gateway 기본 제공 대시보드** (SQL Warehouse 필요) | Serving → 엔드포인트 상세 → **View metrics** / **Create dashboard** (account admin 권한) | 대시보드 자체는 무료, 단 **SQL Warehouse DBU** 과금 | Warehouse 기동 시간에 비례 |
+| 엔드포인트 인프라 헬스 차트 (QPS/지연/오류) | 없음 — Pay-per-token Foundation Model API 엔드포인트는 상세 페이지에 인프라 메트릭 차트를 표시하지 않음 (Custom / Provisioned Throughput에서만 제공) | — | — | 0 |
 | Inference Tables (요청/응답 + 토큰 Delta 저장) | **Unity Catalog 스토리지 (ADLS Gen2)** | 엔드포인트 → AI Gateway → Inference tables 활성화 | ADLS 저장 용량 + 트랜잭션 | 보통 GB당 $0.02/월 수준, 호출량 비례 |
 | 시스템 테이블 조회 (`system.serving.endpoint_usage` 등) | **SQL Warehouse** (Serverless 권장) 또는 **All-Purpose Cluster** + `system.serving` 스키마 활성화 (account admin) | SQL → Warehouses | DBU/시간 (Serverless SQL XS ≈ $0.7~/시간 + Azure 컴퓨트) | **쿼리할 때만 과금**되지만 자동 stop이 없으면 누적 ↑ |
 | 비용 대시보드 (사용자별/엔드포인트별) | SQL Warehouse + Databricks SQL 대시보드 | SQL → Dashboards | 위와 동일 + 스케줄 새로고침 시 재기동 | 새로고침 빈도가 곧 비용 |
 | 외부 모니터링 도구 연계 (Datadog 등) | 외부 도구 라이선스 + Inference Tables 또는 system 테이블에 ETL | 외부 SaaS | 외부 도구 비용 + 데이터 전송 | 도구별 상이 |
 | 알림/이상 탐지 | Databricks **Lakehouse Monitoring** 또는 Job + Notebook 스케줄 | Quality → Monitors | DBU (Serverless Job) | 모니터당 수십 분/일 → 월 단위 적은 비용 |
 
-> **저비용 출발점**: 엔드포인트 자체의 Metrics 탭 + Inference Tables(Storage만 과금)만 활성화하면 SQL Warehouse 없이도 기본 운영이 가능합니다. 정량 분석/대시보드가 필요해진 시점에 SQL Warehouse를 추가하세요.
+> **저비용 출발점**: Pay-per-token Foundation Model API는 엔드포인트 상세 페이지에 요청/토큰 차트가 기본 표시되지 않습니다. 가벼운 수준이면 Inference Tables(Storage만 과금)로 로그만 남기고, 시각화가 필요해진 시점에 AI Gateway 대시보드(SQL Warehouse 필요)를 추가하세요.
 
 ### 10.2 Foundry Models 직접
 
@@ -128,13 +129,13 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 | 비용 분석 | **Azure Cost Management** (기본 무료), **Budgets**, Cost alerts | Cost Management + Billing | 무료 | 0 |
 | (옵션) 단일 SIEM | **Microsoft Sentinel** = Log Analytics 위 + Sentinel 분석 비용 | Sentinel 활성화 | 분석 데이터 GB당 ≈ $4.30 (Pay-as-you-go) | 보안 통합 시만 고려 |
 
-> **저비용 출발점**: 메트릭 탭 + Cost Management + Action Group (이메일) 만으로 시작 → 페이로드 감사가 필요해지면 Log Analytics를 붙이고 **샘플링/보존기간**으로 비용 통제. Application Insights는 OTEL 트레이스가 실제로 필요한 시점에 추가.
+> **저비용 출발점**: Azure Portal의 리소스 **Metrics** 블레이드 + Cost Management + Action Group (이메일) 만으로 시작 → 페이로드 감사가 필요해지면 Log Analytics를 붙이고 **샘플링/보존기간**으로 비용 통제. Application Insights는 OTEL 트레이스가 실제로 필요한 시점에 추가.
 
 ### 10.3 비교 요약
 
 | 비용 항목 | 현재 (Databricks) | Foundry 직접 |
 | --- | --- | --- |
-| **공짜로 보이는 것** | Serving Metrics 탭 | Azure Monitor 플랫폼 메트릭, Cost Management |
+| **공짜로 보이는 것** | (엔드포인트 상세 페이지에 요청/토큰 차트 없음) | Azure Monitor 플랫폼 메트릭, Cost Management |
 | **활성화하는 순간 비용** | SQL Warehouse (DBU/시간) | Log Analytics 수집/보관 (GB당) |
 | **사용량에 비례** | Inference Tables 저장 (GB) | Diagnostic Logs 수집 (GB) |
 | **고정비 위험** | 자동 stop 안 한 SQL Warehouse | 보관기간 길게 잡힌 Log Analytics |
