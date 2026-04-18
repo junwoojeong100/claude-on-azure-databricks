@@ -91,8 +91,9 @@ cp .env.example .env
 
 | 위치 | 용도 |
 | --- | --- |
-| Databricks UI → Serving → 엔드포인트 → **Metrics** | 시간별 토큰/요청/지연시간 차트 |
-| `system.serving.endpoint_usage` (시스템 테이블) | 사용자/엔드포인트/시간 단위 집계, 비용 분석 |
+| Databricks UI → Serving → 엔드포인트 상세 페이지 | (Custom / Provisioned Throughput 엔드포인트만) 인프라 헬스 메트릭 차트 |
+| Databricks UI → Serving → AI Gateway → **Create / View Dashboard** | 토큰/요청/지연시간/사용자별 빌트인 대시보드 (account admin이 import 필요, 백엔드에 SQL Warehouse 사용) |
+| `system.ai_gateway.usage` (AI Gateway Beta) / `system.serving.endpoint_usage` (시스템 테이블) | 사용자/엔드포인트/시간 단위 집계, 비용 분석 (account admin 권한 필요) |
 | Inference Tables (엔드포인트 설정에서 활성화) | 모든 요청/응답 + 토큰을 Delta 테이블로 저장 |
 
 예시 SQL:

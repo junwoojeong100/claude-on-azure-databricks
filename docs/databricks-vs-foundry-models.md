@@ -41,7 +41,7 @@ Foundry 직접이 **홉(hop)이 적고**, Azure 네트워크 정책과 일관성
 
 | 항목 | 현재 | Foundry 직접 |
 | --- | --- | --- |
-| 메트릭 | Serving UI Metrics + `system.serving.endpoint_usage` | **Azure Monitor Metrics** + Foundry Tracing (OpenTelemetry) |
+| 메트릭 | 인프라 헬스 메트릭은 엔드포인트 상세 페이지에 자동(주로 Custom/Provisioned). Pay-per-token Foundation Model API는 별도 빌트인 대시보드(AI Gateway → Create/View Dashboard) 또는 시스템 테이블(`system.ai_gateway.usage`, `system.serving.endpoint_usage`) 조회 필요 | **Azure Monitor Metrics** + Foundry Tracing (OpenTelemetry) |
 | 로그 | Databricks Inference Tables (Delta) | Diagnostic Settings → Log Analytics / Storage |
 | 분산 추적 | 별도 구성 | **Agent Framework + Foundry Tracing** 네이티브 |
 | 콘텐츠 안전 로그 | AI Gateway에서 별도 설정 | Content Safety가 Foundry에 기본 내장 |
