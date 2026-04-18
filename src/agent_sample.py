@@ -11,7 +11,9 @@ Databricks Foundation Model API는 OpenAI Chat Completions와 동일한 페이�
 """
 
 import asyncio
+import itertools
 import os
+import sys
 
 import httpx
 from dotenv import load_dotenv
@@ -52,6 +54,19 @@ def build_client() -> OpenAIChatCompletionClient:
     )
 
 
+async def _spinner(prefix: str = "[Agent] ", interval: float = 0.08) -> None:
+    frames = itertools.cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+    try:
+        while True:
+            sys.stdout.write(f"\r{prefix}{next(frames)} 응답 대기 중…")
+            sys.stdout.flush()
+            await asyncio.sleep(interval)
+    except asyncio.CancelledError:
+        sys.stdout.write("\r\033[2K")
+        sys.stdout.flush()
+        raise
+
+
 async def main() -> None:
     agent = build_client().as_agent(
         name="DatabricksClaudeAgent",
@@ -80,11 +95,27 @@ async def main() -> None:
             if not user_message:
                 break
 
-            print("[Agent] ", end="", flush=True)
             stream = agent.run(user_message, stream=True)
-            async for update in stream:
-                if update.text:
-                    print(update.text, end="", flush=True)
+            spinner_task: asyncio.Task | None = asyncio.create_task(_spinner())
+            try:
+                async for update in stream:
+                    if update.text:
+                        if spinner_task is not None:
+                            spinner_task.cancel()
+                            try:
+                                await spinner_task
+                            except asyncio.CancelledError:
+                                pass
+                            spinner_task = None
+                            print("[Agent] ", end="", flush=True)
+                        print(update.text, end="", flush=True)
+            finally:
+                if spinner_task is not None and not spinner_task.done():
+                    spinner_task.cancel()
+                    try:
+                        await spinner_task
+                    except asyncio.CancelledError:
+                        pass
             print()
 
             response = await stream.get_final_response()
