@@ -98,11 +98,113 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 
 ---
 
-## 10. 모니터링/관측을 위해 추가로 프로비저닝해야 하는 리소스와 비용
+---
+
+## 10. 관리자 권한 모델 — Workspace Admin / Account Admin / Metastore
+
+Databricks의 운영·관측 작업 중 상당수는 **어느 레벨의 관리자 권한이 있느냐**에 따라 가능 여부가 갈립니다. Foundry와 가장 헷갈리는 부분이라 별도로 정리합니다.
+
+### 10.1 세 가지 레벨
+
+| 레벨 | 스코프 | 부여 방법 | 대표 권한 |
+| --- | --- | --- | --- |
+| **Workspace admin** | 단일 Databricks workspace | 워크스페이스를 만든 Azure 사용자(구독 Owner/Contributor)에게 **자동 부여**. 이후 SCIM/UI로 다른 사람에게 부여 | 워크스페이스 내 사용자/그룹·권한·클러스터·서빙 엔드포인트·잡 관리, PAT 발급, 노트북 권한 |
+| **Account admin** | Databricks **account** 전체 (테넌트 단위, account console = `accounts.azuredatabricks.net`) | **자동 부여되지 않음**. 최초 1회는 **Microsoft Entra ID Global Administrator**가 account console에 처음 로그인하여 부트스트랩. 이후 기존 account admin이 SCIM/CLI/UI로 위임 | 새 워크스페이스 생성, 메타스토어 생성/할당, 시스템 스키마(`system.*`) 활성화, AI Gateway 빌트인 대시보드 import, 계정 사용자/그룹 관리, 청구/구독 |
+| **Metastore admin** | Unity Catalog metastore 1개 (보통 region 1개) | 메타스토어 생성 시 지정 (account admin이 생성). 기본은 그 사용자/그룹이 owner | 카탈로그 생성/소유권 이전, 외부 location/storage credential 관리, 모든 카탈로그·스키마·테이블에 대한 메타데이터 권한 |
+
+> **⚠️ 흔한 오해**: "워크스페이스를 내가 만들었으니 account admin도 자동으로 갖는다" → 아닙니다. Workspace admin만 자동이고, account admin은 별도 부트스트랩이 필요합니다.
+
+### 10.2 부트스트랩 (최초 account admin) 절차
+
+Microsoft Learn 공식 문서 요지:
+
+> "For security and organizational integrity, Databricks requires that a **Microsoft Entra ID Global Administrator** establish your account's first account admin role."
+
+1. Microsoft Entra ID **Global Administrator** 권한이 있는 사용자가 https://accounts.azuredatabricks.net 접속.
+2. AAD 로그인 → 첫 로그인 시 자동으로 해당 Databricks 계정의 account admin이 부여됨.
+3. 부여 후에는 Global Administrator 권한이 더 이상 필요 없음 (Account console 접근만 가능하면 됨).
+4. 이후 추가 account admin은 아래 명령어 등으로 임의 사용자에게 위임 가능 (Global Admin 권한 불필요).
+
+```bash
+# 사전: account profile 구성 (한 번만)
+databricks auth login --account-id <ACCOUNT_ID> --host https://accounts.azuredatabricks.net
+
+# Account admin 역할 부여
+databricks account users patch <USER_ID> -p ACCOUNT --json '{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    {"op": "add", "path": "roles", "value": [{"value": "account_admin"}]}
+  ]
+}'
+```
+
+> **Azure 구독 Owner/Contributor만으로는 account admin 부트스트랩 불가**. 반드시 Entra ID Global Administrator가 최초 1회 클릭해야 합니다.
+
+### 10.3 Unity Catalog Metastore — 별도 자원이라는 점
+
+Foundry에서는 데이터 권한이 Azure RBAC + Storage 권한으로 자연스럽게 흘러가지만, Databricks는 **Unity Catalog metastore를 region별로 1개 생성**하고 거기에 워크스페이스를 **assign**해야 카탈로그/테이블/모델 거버넌스가 동작합니다.
+
+| 항목 | 설명 |
+| --- | --- |
+| 생성 권한 | **Account admin** 만 가능 (account console → Catalog → Create metastore) |
+| 1개 region 1개 | 같은 region 내 모든 워크스페이스가 동일 metastore 공유 권장 |
+| 백킹 스토리지 | 메타스토어용 ADLS Gen2 컨테이너 + Access Connector for Azure Databricks (managed identity) 필요 |
+| Workspace 연결 | account admin이 워크스페이스를 metastore에 **assign** 해야 Unity Catalog 활성화됨 |
+| 시스템 스키마 | `system.serving.endpoint_usage`, `system.ai_gateway.usage`, `system.access.audit` 등은 metastore가 있고 account admin이 활성화(`SYSTEM SCHEMAS` enable)해야 조회 가능 |
+| Metastore admin | 메타스토어 owner 그룹/사용자. 카탈로그 생성·소유권 이전·외부 location 관리 가능 |
+
+> Unity Catalog가 활성화되어 있어야 **AI Gateway 사용량 시스템 테이블·Inference Tables·시리얼라이즈된 모델 배포** 등 본 문서 4·11절에서 다룬 관측 기능이 의미를 갖습니다.
+
+### 10.4 본 샘플(Pay-per-token Foundation Model API) 운영 시 필요 권한 매트릭스
+
+| 작업 | 필요한 최소 권한 |
+| --- | --- |
+| 엔드포인트 호출 (CAN QUERY) | 사용자/SP에 엔드포인트 권한 부여 — workspace admin이 부여 |
+| PAT 발급 (이 샘플 동작용) | 본인 사용자 권한 (workspace 설정에서 PAT 허용된 경우) |
+| Inference Tables 활성화 | **Workspace admin** + Unity Catalog enabled 워크스페이스 |
+| AI Gateway `usage_tracking_config.enabled = true` | **Workspace admin** |
+| `system.serving.endpoint_usage` / `system.ai_gateway.usage` 조회 | **Account admin이 시스템 스키마 활성화** 후 사용자에게 `USE SCHEMA` + `SELECT` 부여 |
+| AI Gateway 빌트인 대시보드 import | **Account admin** + SQL Warehouse |
+| Metastore 생성/워크스페이스 할당 | **Account admin** |
+| 신규 워크스페이스 생성 | **Account admin** |
+
+### 10.5 빠른 자가 진단
+
+본인 권한을 1회 호출로 점검:
+
+```bash
+# Workspace 레벨 — admins 그룹에 속하면 workspace admin
+curl -sH "Authorization: Bearer $DATABRICKS_TOKEN" \
+  "$DATABRICKS_HOST/api/2.0/preview/scim/v2/Me" | jq '.groups[].display'
+
+# Account 레벨 — roles에 account_admin 또는 그룹 admins가 있으면 account admin
+curl -sH "Authorization: Bearer $DATABRICKS_TOKEN" \
+  "$DATABRICKS_HOST/api/2.0/account/scim/v2/Me" | jq '{roles, groups: [.groups[].display]}'
+
+# Entra ID Global Administrator 여부 (부트스트랩 가능자인지)
+az rest --method get \
+  --url "https://graph.microsoft.com/v1.0/me/memberOf?\$select=displayName" \
+  --query "value[?displayName=='Global Administrator']"
+```
+
+### 10.6 Foundry와의 대비
+
+| | Databricks | Foundry |
+| --- | --- | --- |
+| 관리자 레이어 수 | **3개** (Workspace / Account / Metastore admin) | **1개** (Azure RBAC만; Owner / Contributor / Cognitive Services 역할 등) |
+| 부트스트랩 사람 | Entra ID Global Administrator (최초 1회) | Azure 구독 Owner/관리자 (자연 발생) |
+| 데이터 거버넌스 자원 | Unity Catalog Metastore (별도 생성·할당 필요) | Storage/Resource RBAC + Foundry Project 권한 |
+| 시스템 사용량 데이터 접근 | Account admin → Metastore → System schema enable → 권한 부여 (다단계) | Azure Monitor / Cost Management / Diagnostic logs (Reader 권한이면 대부분 조회 가능) |
+
+> 즉 Databricks는 **거버넌스 레이어를 한 단계 더 가지며 그만큼 부트스트랩이 까다롭지만**, 일단 세팅되면 Lakehouse 데이터와 모델 사용량을 한 카탈로그에서 통합 분석할 수 있는 게 강점입니다.
+
+---
+
+## 11. 모니터링/관측을 위해 추가로 프로비저닝해야 하는 리소스와 비용
 
 위의 "관측성" 섹션은 **어떤 도구로 보는가**를 다뤘다면, 여기서는 **그 도구를 쓰기 위해 별도로 활성화/생성해야 하는 리소스**와 그에 따른 **추가 비용**을 정리합니다. 모델 호출 비용(토큰 과금)은 양쪽 모두 별도이며 여기에는 포함하지 않습니다.
 
-### 10.1 현재 (Databricks Foundation Model API)
+### 11.1 현재 (Databricks Foundation Model API)
 
 | 용도 | 추가로 필요한 리소스 | 활성화 위치 | 비용 모델 | 실무 체감 비용 |
 | --- | --- | --- | --- | --- |
@@ -116,7 +218,7 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 
 > **저비용 출발점**: Pay-per-token Foundation Model API는 엔드포인트 상세 페이지에 요청/토큰 차트가 기본 표시되지 않습니다. 가벼운 수준이면 Inference Tables(Storage만 과금)로 로그만 남기고, 시각화가 필요해진 시점에 AI Gateway 대시보드(SQL Warehouse 필요)를 추가하세요.
 
-### 10.2 Foundry Models 직접
+### 11.2 Foundry Models 직접
 
 | 용도 | 추가로 필요한 리소스 | 활성화 위치 | 비용 모델 | 실무 체감 비용 |
 | --- | --- | --- | --- | --- |
@@ -131,7 +233,7 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 
 > **저비용 출발점**: Azure Portal의 리소스 **Metrics** 블레이드 + Cost Management + Action Group (이메일) 만으로 시작 → 페이로드 감사가 필요해지면 Log Analytics를 붙이고 **샘플링/보존기간**으로 비용 통제. Application Insights는 OTEL 트레이스가 실제로 필요한 시점에 추가.
 
-### 10.3 비교 요약
+### 11.3 비교 요약
 
 | 비용 항목 | 현재 (Databricks) | Foundry 직접 |
 | --- | --- | --- |
@@ -142,7 +244,7 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 | **세분화된 청구 분해** | DBU 한 줄로 합산 → SKU별 분해 필요 | Cost Management에서 모델/태그/리소스별 분해 즉시 가능 |
 | **통합 가능 범위** | Databricks 생태계 내 통합이 1급 | 모든 Azure 리소스(앱, DB, 네트워크 등)와 동일 도구로 통합 |
 
-### 10.4 비용 통제 체크리스트
+### 11.4 비용 통제 체크리스트
 
 - **Databricks 측**
   - SQL Warehouse는 **Serverless + Auto-stop 5~10분**으로 설정.
