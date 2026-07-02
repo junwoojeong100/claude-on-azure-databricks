@@ -108,6 +108,37 @@ SAMPLE_QUESTIONS = [
 ]
 
 
+_ENABLEMENT_ERROR_HINTS = (
+    "rate limit of 0",
+    "temporarily disabled",
+    "PERMISSION_DENIED",
+)
+
+
+def _looks_like_partner_enablement_error(exc: BaseException) -> bool:
+    text = str(exc)
+    return any(hint in text for hint in _ENABLEMENT_ERROR_HINTS)
+
+
+def _print_partner_enablement_help(endpoint: str) -> None:
+    # Anthropic (Claude) endpoints are partner-powered and are disabled by
+    # default at the account level in some tenants, so the very first call
+    # fails with a Databricks-set rate limit of 0. Point the operator at the
+    # exact account-console toggle instead of dumping a raw stack trace.
+    print(
+        "\n" + "=" * 60 + "\n"
+        f"[!] '{endpoint}' 호출이 거부되었습니다 (Databricks-set rate limit of 0).\n\n"
+        "Anthropic Claude는 파트너 기반(partner-powered) 모델이라 계정 레벨\n"
+        "활성화가 필요합니다. 계정 관리자가 account console에서 켜야 합니다:\n"
+        "  1) https://accounts.azuredatabricks.net (계정 관리자로 로그인)\n"
+        "  2) Settings → Feature enablement\n"
+        "  3) 'Enable partner-powered AI features' = On\n\n"
+        "참고: databricks-meta-llama-3-3-70b-instruct 같은 Databricks 자체\n"
+        "호스팅 모델은 이 설정 없이도 동작합니다.\n"
+        + "=" * 60
+    )
+
+
 async def main() -> None:
     agent = build_client().as_agent(
         name="DatabricksClaudeAgent",
@@ -159,6 +190,20 @@ async def main() -> None:
                             spinner_task = None
                             print("[Agent] ", end="", flush=True)
                         print(update.text, end="", flush=True)
+            except Exception as exc:  # noqa: BLE001
+                if spinner_task is not None and not spinner_task.done():
+                    spinner_task.cancel()
+                    try:
+                        await spinner_task
+                    except asyncio.CancelledError:
+                        pass
+                    spinner_task = None
+                if not _looks_like_partner_enablement_error(exc):
+                    raise
+                _print_partner_enablement_help(
+                    os.environ.get("DATABRICKS_SERVING_ENDPOINT", "?")
+                )
+                return
             finally:
                 if spinner_task is not None and not spinner_task.done():
                     spinner_task.cancel()
