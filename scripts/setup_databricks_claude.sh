@@ -17,11 +17,11 @@
 #
 # Usage:
 #   scripts/setup_databricks_claude.sh
-#   RG=my-rg LOCATION=eastus2 WORKSPACE=my-ws scripts/setup_databricks_claude.sh
+#   RG=my-rg LOCATION=koreacentral WORKSPACE=my-ws scripts/setup_databricks_claude.sh
 #
 # Configurable via environment variables (defaults shown):
 RG="${RG:-rg-databricks-claude}"
-LOCATION="${LOCATION:-koreacentral}"
+LOCATION="${LOCATION:-eastus2}"
 WORKSPACE="${WORKSPACE:-ws-databricks-claude}"
 SKU="${SKU:-premium}"
 ENDPOINT="${ENDPOINT:-databricks-claude-opus-4-8}"          # target model

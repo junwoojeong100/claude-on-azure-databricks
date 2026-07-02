@@ -24,7 +24,7 @@ Databricks Foundation Model API의 Anthropic 모델은 OpenAI Chat Completions�
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 scripts/setup_databricks_claude.sh
-# 이름/리전 변경: RG=my-rg LOCATION=eastus2 WORKSPACE=my-ws scripts/setup_databricks_claude.sh
+# 이름/리전 변경: RG=my-rg LOCATION=koreacentral WORKSPACE=my-ws scripts/setup_databricks_claude.sh
 ```
 
 스크립트는 대상 엔드포인트(`databricks-claude-opus-4-8`) 호출을 테스트하고, 만약
