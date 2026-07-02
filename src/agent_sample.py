@@ -130,9 +130,12 @@ def _print_endpoint_enablement_help(endpoint: str) -> None:
     print(
         "\n" + "=" * 60 + "\n"
         f"[!] '{endpoint}' 호출이 거부되었습니다 (Databricks-set rate limit of 0).\n\n"
-        "Claude는 Databricks-hosted Foundation Model이지만(Llama와 동일한 API/과금/한도),\n"
-        "Anthropic(라이선스 파트너) 모델은 계정/지역별 서빙 용량 할당 대상입니다. 이 계정에\n"
-        "할당이 0이라 막힌 상태로, PAT·권한·partner-powered·cross-Geo 등 고객 설정으로는\n"
+        "Claude는 Databricks-hosted Foundation Model이지만"
+        "(Llama와 동일한 API/과금/한도),\n"
+        "Anthropic(라이선스 파트너) 모델은 계정/지역별 서빙 용량 "
+        "할당 대상입니다. 이 계정에\n"
+        "할당이 0이라 막힌 상태로, "
+        "PAT·권한·partner-powered·cross-Geo 등 고객 설정으로는\n"
         "바뀌지 않습니다. 해결:\n"
         "  - Anthropic 용량이 할당된 다른 Entra 테넌트/구독에서 실행, 또는\n"
         "  - Azure Databricks account team에 계정의 Anthropic 용량 활성화 요청.\n"
@@ -246,7 +249,8 @@ async def main() -> None:
             print("=" * 60)
             print(
                 f"세션 요약 — {turns}턴, "
-                f"총 input={total_input}, output={total_output}, total={total_all} tokens"
+                f"총 input={total_input}, output={total_output}, "
+                f"total={total_all} tokens"
             )
 
 

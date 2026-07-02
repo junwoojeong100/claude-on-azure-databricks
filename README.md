@@ -247,7 +247,7 @@ Microsoft Learn 공식 문서 요지:
 
 > "For security and organizational integrity, Databricks requires that a **Microsoft Entra ID Global Administrator** establish your account's first account admin role."
 
-1. Microsoft Entra ID **Global Administrator** 권한이 있는 사용자가 https://accounts.azuredatabricks.net 접속.
+1. Microsoft Entra ID **Global Administrator** 권한이 있는 사용자가 <https://accounts.azuredatabricks.net> 접속.
 2. AAD 로그인 → 첫 로그인 시 자동으로 해당 Databricks 계정의 account admin이 부여됨.
 3. 부여 후에는 Global Administrator 권한이 더 이상 필요 없음 (Account console 접근만 가능하면 됨).
 4. 이후 추가 account admin은 아래 명령어 등으로 임의 사용자에게 위임 가능 (Global Admin 권한 불필요).
