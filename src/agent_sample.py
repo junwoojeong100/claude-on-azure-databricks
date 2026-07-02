@@ -121,24 +121,26 @@ def _looks_like_endpoint_disabled_error(exc: BaseException) -> bool:
 
 
 def _print_endpoint_enablement_help(endpoint: str) -> None:
-    # Anthropic Claude models are classified as "EU and US" pay-per-token
-    # models. A workspace outside the EU/US (e.g. koreacentral) must have
-    # cross-Geo data processing enabled to reach them, otherwise the very
-    # first call fails with a Databricks-set rate limit of 0. Point the
-    # operator at the exact account-console toggle instead of a stack trace.
+    # Anthropic Claude on Databricks is a *Databricks-hosted* Foundation Model
+    # (same /invocations API, system.ai catalog, DBU billing and 200k ITPM
+    # limit as Llama). A 403 "rate limit of 0" is therefore not normal
+    # throttling (that returns 429) but an account-level Anthropic serving-
+    # capacity allocation of 0 — not fixable via customer settings. Point the
+    # operator at the real remedy instead of dumping a stack trace.
     print(
         "\n" + "=" * 60 + "\n"
         f"[!] '{endpoint}' 호출이 거부되었습니다 (Databricks-set rate limit of 0).\n\n"
-        "Claude(예: Opus 4.8)는 'EU/US 리전' pay-per-token 모델이라, 워크스페이스가\n"
-        "EU/US가 아닌 리전(예: koreacentral)이면 cross-Geo 데이터 처리를 켜야\n"
-        "접근할 수 있습니다. 계정 관리자가 account console에서 설정하세요:\n"
-        "  1) https://accounts.azuredatabricks.net (계정 관리자로 로그인)\n"
-        "  2) 사이드바 Workspaces → 해당 워크스페이스 클릭\n"
-        "  3) Security and compliance 탭\n"
-        "  4) 'Enforce data processing within workspace Geography for\n"
-        "     Designated Services'를 Off (= cross-Geo 처리 허용)\n\n"
-        "참고: databricks-meta-llama-3-3-70b-instruct 같은 인리전 Databricks\n"
-        "호스팅 모델은 이 설정 없이도 동작합니다.\n"
+        "Claude는 Databricks-hosted Foundation Model이지만(Llama와 동일한 API/과금/한도),\n"
+        "Anthropic(라이선스 파트너) 모델은 계정/지역별 서빙 용량 할당 대상입니다. 이 계정에\n"
+        "할당이 0이라 막힌 상태로, PAT·권한·partner-powered·cross-Geo 등 고객 설정으로는\n"
+        "바뀌지 않습니다. 해결:\n"
+        "  - Anthropic 용량이 할당된 다른 Entra 테넌트/구독에서 실행, 또는\n"
+        "  - Azure Databricks account team에 계정의 Anthropic 용량 활성화 요청.\n"
+        "  (비 EU/US 리전은 account console → Workspaces → 워크스페이스 →\n"
+        "   Security and compliance에서 cross-Geo 처리도 켜야 하지만, 위 용량이 0이면\n"
+        "   그것만으로는 열리지 않습니다.)\n\n"
+        "참고: databricks-meta-llama-3-3-70b-instruct 같은 오픈 Databricks 호스팅\n"
+        "모델은 이 할당과 무관하게 동작합니다.\n"
         + "=" * 60
     )
 
