@@ -119,11 +119,61 @@ model_list:
 litellm_settings:
   # Silently drop provider-unsupported OpenAI params instead of erroring.
   drop_params: true
+  # Strip Anthropic 'thinking' content Claude Code replays in history, which
+  # Databricks rejects ("messages.N.thinking_blocks: Extra inputs are not
+  # permitted"). See custom_handlers.py.
+  callbacks: custom_handlers.proxy_handler_instance
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
 EOF
 ok "wrote $PROXY_DIR/config.yaml"
+
+# LiteLLM pre-call hook: strip Anthropic 'thinking' content Claude Code replays
+# in history (Databricks rejects the resulting thinking_blocks/reasoning_content).
+cat > "$PROXY_DIR/custom_handlers.py" <<'PYEOF'
+"""Strip Anthropic 'thinking' content before the Databricks upstream call.
+
+Claude Code (extended thinking) replays prior assistant 'thinking' blocks in the
+conversation history. LiteLLM forwards them to Databricks as `thinking_blocks` /
+`reasoning_content`, which the Databricks serving endpoint rejects with
+`messages.N.thinking_blocks: Extra inputs are not permitted`. Remove that
+reasoning content from every message so the upstream request validates.
+"""
+
+from litellm.integrations.custom_logger import CustomLogger
+
+_THINKING_TYPES = {"thinking", "redacted_thinking"}
+
+
+class StripThinkingBlocks(CustomLogger):
+    def _clean(self, data):
+        if not isinstance(data, dict):
+            return data
+        messages = data.get("messages")
+        if isinstance(messages, list):
+            for msg in messages:
+                if not isinstance(msg, dict):
+                    continue
+                msg.pop("thinking_blocks", None)
+                msg.pop("reasoning_content", None)
+                content = msg.get("content")
+                if isinstance(content, list):
+                    filtered = [
+                        block
+                        for block in content
+                        if not (isinstance(block, dict) and block.get("type") in _THINKING_TYPES)
+                    ]
+                    msg["content"] = filtered if filtered else ""
+        return data
+
+    async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
+        return self._clean(data)
+
+
+proxy_handler_instance = StripThinkingBlocks()
+PYEOF
+ok "wrote $PROXY_DIR/custom_handlers.py"
 
 # Self-contained credentials for the proxy (not coupled to the repo location).
 umask 077

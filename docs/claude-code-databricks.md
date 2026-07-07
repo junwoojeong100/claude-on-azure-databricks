@@ -161,6 +161,7 @@ scripts/setup_claude_code_databricks.sh
 | 위치 | 역할 |
 | --- | --- |
 | `~/.claude-databricks/config.yaml` | LiteLLM 라우팅(엔드포인트 + 와일드카드 `*` → `databricks/<endpoint>`) |
+| `~/.claude-databricks/custom_handlers.py` | 프리콜 훅 — Databricks가 거부하는 `thinking_blocks`/`reasoning_content` 제거 |
 | `~/.claude-databricks/.env` (0600) | 프록시 전용 자격증명(`DATABRICKS_API_KEY`/`DATABRICKS_API_BASE`/`LITELLM_MASTER_KEY`) |
 | `~/.claude-databricks/start-proxy.sh` | 프록시 실행 스크립트 |
 | `~/.claude-databricks/.venv/` | LiteLLM 전용 파이썬 환경 |
@@ -223,9 +224,40 @@ model_list:
       api_base: os.environ/DATABRICKS_API_BASE
 litellm_settings:
   drop_params: true
+  callbacks: custom_handlers.proxy_handler_instance
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
 EOF
+
+# 3b) thinking 블록 제거 훅 (Databricks가 거부하는 thinking_blocks/reasoning_content 제거)
+cat > custom_handlers.py <<'PYEOF'
+from litellm.integrations.custom_logger import CustomLogger
+
+_THINKING_TYPES = {"thinking", "redacted_thinking"}
+
+
+class StripThinkingBlocks(CustomLogger):
+    def _clean(self, data):
+        if not isinstance(data, dict):
+            return data
+        for msg in (data.get("messages") or []):
+            if not isinstance(msg, dict):
+                continue
+            msg.pop("thinking_blocks", None)
+            msg.pop("reasoning_content", None)
+            content = msg.get("content")
+            if isinstance(content, list):
+                kept = [b for b in content
+                        if not (isinstance(b, dict) and b.get("type") in _THINKING_TYPES)]
+                msg["content"] = kept if kept else ""
+        return data
+
+    async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
+        return self._clean(data)
+
+
+proxy_handler_instance = StripThinkingBlocks()
+PYEOF
 
 # 4) 실행 스크립트
 cat > start-proxy.sh <<'EOF'
@@ -362,6 +394,7 @@ Claude Code 안에서 `/status`를 실행하면 `Anthropic base URL`이
 | `claude` 연결 오류 / 무응답 | 프록시가 꺼짐. `launchctl list \| grep claude-proxy` 확인 후 로드, 또는 §7 수동 실행. `proxy.log` 확인. |
 | `Address already in use` | 같은 포트를 쓰는 인스턴스 중복(서비스 + 수동). `lsof -nP -iTCP:4000 -sTCP:LISTEN -t`로 PID 확인 후 하나만 남김. |
 | `403` / `rate limit of 0` | Databricks 계정에 Anthropic 서빙 용량 미할당(고객 설정으로 해결 불가). `README.md` 문제 해결 절 참고. |
+| `messages.N.thinking_blocks: Extra inputs are not permitted` | Claude Code가 이력에 재전송한 thinking 블록을 Databricks가 거부. `custom_handlers.py`(프리콜 훅)가 제거합니다 — 이 파일이 있고 `config.yaml`에 `callbacks`가 설정됐는지 확인 후 프록시 재시작. |
 | `401` / 인증 실패 | ① Claude Code의 `ANTHROPIC_AUTH_TOKEN`과 `config.yaml`의 `master_key` 불일치, 또는 ② `.env`의 Databricks 토큰 만료/무효. 갱신 후 프록시 재시작. |
 | `.env` 변경 미반영 | 프록시 재시작 필요(§6). 프로세스는 시작 시점에만 `.env`를 읽음. |
 | 로그 위치 | `~/.claude-databricks/proxy.log` |
