@@ -227,8 +227,10 @@ fi
 # ---------------------------------------------------------------------------
 log "7/7 Verify"
 if [ "$AUTOSTART" = "1" ]; then
-  for _ in $(seq 1 30); do [ "$(health)" = "200" ] && break; sleep 1; done
-  [ "$(health)" = "200" ] || { warn "proxy did not become healthy — check $PROXY_DIR/proxy.log"; exit 0; }
+  # First start of a fresh venv can be slow (litellm import + model registration),
+  # so allow up to 60s before warning.
+  for _ in $(seq 1 60); do [ "$(health)" = "200" ] && break; sleep 1; done
+  [ "$(health)" = "200" ] || { warn "proxy not healthy yet after 60s (cold start can be slow) — check $PROXY_DIR/proxy.log, then retry: curl http://127.0.0.1:$PORT/health/liveliness"; exit 0; }
   ok "proxy healthy on 127.0.0.1:$PORT"
   RESP="$(curl -s "http://127.0.0.1:$PORT/v1/messages" \
     -H "Authorization: Bearer $MASTER_KEY" -H "Content-Type: application/json" \
