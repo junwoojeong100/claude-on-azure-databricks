@@ -84,7 +84,9 @@ scripts/setup_claude_code_databricks.sh
 2. `~/.claude-databricks/`에 전용 파이썬 환경을 만들고 `litellm[proxy]` 설치
 3. 프록시 설정(`config.yaml`), 자격증명(`.env`, 권한 0600), 실행 스크립트 작성
 4. `~/.claude/settings.json`의 `env` 블록을 **병합**(기존 설정 보존)
-5. macOS에서는 launchd 서비스로 자동 시작 등록(로그인 시 실행 + 크래시 재시작)
+5. 프록시 시작 — macOS는 launchd 서비스로 자동 시작 등록(로그인 시 실행 +
+   크래시 재시작). 그 외 OS는 우선 백그라운드(nohup)로 실행되며, 영구 실행은
+   §6의 systemd 설정을 권장
 6. 헬스 체크와 `/v1/messages` 왕복 테스트로 검증
 
 완료 후 **새 터미널**을 열고 `claude`를 실행하면 Databricks의 Claude로
@@ -121,7 +123,7 @@ scripts/setup_claude_code_databricks.sh
 | 위치 | 역할 |
 | --- | --- |
 | `~/.claude-databricks/config.yaml` | LiteLLM 라우팅(엔드포인트 + 와일드카드 `*` → `databricks/<endpoint>`) |
-| `~/.claude-databricks/.env` (0600) | 프록시 전용 자격증명(`DATABRICKS_API_KEY`/`API_BASE`/`LITELLM_MASTER_KEY`) |
+| `~/.claude-databricks/.env` (0600) | 프록시 전용 자격증명(`DATABRICKS_API_KEY`/`DATABRICKS_API_BASE`/`LITELLM_MASTER_KEY`) |
 | `~/.claude-databricks/start-proxy.sh` | 프록시 실행 스크립트 |
 | `~/.claude-databricks/.venv/` | LiteLLM 전용 파이썬 환경 |
 | `~/.claude-databricks/proxy.log` | 실행/요청 로그 |
@@ -165,6 +167,7 @@ DATABRICKS_API_KEY=<your-databricks-pat>
 DATABRICKS_API_BASE=https://<workspace>.azuredatabricks.net/serving-endpoints
 LITELLM_MASTER_KEY=sk-databricks-local
 EOF
+chmod 600 .env
 umask 022
 
 # 3) 라우팅 설정
@@ -222,6 +225,10 @@ launchctl load -w ~/Library/LaunchAgents/com.databricks.claude-proxy.plist
 > `config.yaml`이나 `.env`를 바꾼 뒤에는 **재시작**(unload → load)해야 반영됩니다.
 
 ### Linux (systemd --user, 참고)
+
+원클릭 스크립트는 비-macOS에서 프록시를 nohup으로만 임시 실행합니다(관리되지 않아
+재부팅·크래시 후 자동 복구되지 않음). 영구 실행·자동 복구가 필요하면 아래 systemd
+user 서비스를 설정하세요.
 
 `~/.config/systemd/user/claude-databricks.service`:
 
