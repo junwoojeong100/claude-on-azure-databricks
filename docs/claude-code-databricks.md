@@ -163,10 +163,10 @@ scripts/setup_claude_code_databricks.sh
 | `~/.claude-databricks/config.yaml` | LiteLLM 라우팅(엔드포인트 + 와일드카드 `*` → `databricks/<endpoint>`) |
 | `~/.claude-databricks/custom_handlers.py` | 프리콜 훅 — Databricks가 거부하는 `thinking_blocks`/`reasoning_content` 제거 |
 | `~/.claude-databricks/.env` (0600) | 프록시 전용 자격증명(`DATABRICKS_API_KEY`/`DATABRICKS_API_BASE`/`LITELLM_MASTER_KEY`) |
-| `~/.claude-databricks/start-proxy.sh` | 프록시 실행 스크립트 |
+| `~/.claude-databricks/start-proxy.sh` (Windows는 `start-proxy.ps1`) | 프록시 실행 스크립트 |
 | `~/.claude-databricks/.venv/` | LiteLLM 전용 파이썬 환경 |
 | `~/.claude-databricks/proxy.log` | 실행/요청 로그 |
-| `~/Library/LaunchAgents/com.databricks.claude-proxy.plist` | (macOS) 자동 시작 서비스 |
+| `~/Library/LaunchAgents/com.databricks.claude-proxy.plist` | (macOS) 자동 시작 서비스 — Windows는 작업 스케줄러 `ClaudeDatabricksProxy` |
 | `~/.claude/settings.json` | Claude Code를 프록시로 향하게 하는 `env` 블록 |
 
 `~/.claude/settings.json`의 `env` 블록:
@@ -360,6 +360,9 @@ launchctl unload ~/Library/LaunchAgents/com.databricks.claude-proxy.plist 2>/dev
 
 > ⚠️ 자동 시작 서비스와 수동 실행을 동시에 하면 둘 다 같은 포트를 잡으려다
 > `Address already in use`로 실패합니다. 한 번에 하나만 실행하세요.
+>
+> Windows: `Stop-ScheduledTask -TaskName ClaudeDatabricksProxy` 후
+> `powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude-databricks\start-proxy.ps1"`.
 
 ---
 
@@ -417,14 +420,29 @@ rm ~/Library/LaunchAgents/com.databricks.claude-proxy.plist
 rm -rf ~/.claude-databricks
 ```
 
+Windows(PowerShell):
+
+```powershell
+# LiteLLM 업데이트
+uv pip install --python "$env:USERPROFILE\.claude-databricks\.venv\Scripts\python.exe" -U "litellm[proxy]"
+
+# 되돌리기: 작업 스케줄러 제거 + settings의 env 블록 제거
+Stop-ScheduledTask -TaskName ClaudeDatabricksProxy
+Unregister-ScheduledTask -TaskName ClaudeDatabricksProxy -Confirm:$false
+#  그리고 %USERPROFILE%\.claude\settings.json 의 "env" 블록 제거
+
+# 완전 제거
+Remove-Item -Recurse -Force "$env:USERPROFILE\.claude-databricks"
+```
+
 ---
 
 ## 11. 주의사항
 
 - 프록시는 `127.0.0.1`(로컬호스트)에만 바인딩되어 외부 접근 불가.
 - `sk-databricks-local`은 로컬 전용 키이며 클라우드 비밀이 아님.
-- 실제 비밀(Databricks 토큰)은 리포 `.env`와 `~/.claude-databricks/.env`(0600)에만
-  존재. 두 파일 모두 커밋 금지(리포 `.env`는 `.gitignore`로 제외됨).
+- 실제 비밀(Databricks 토큰)은 `~/.claude-databricks/.env`(0600)에 저장되며, 리포 `.env`로
+  설치했다면 거기에도 있습니다. 두 파일 모두 커밋 금지(리포 `.env`는 `.gitignore`로 제외).
 - 도구 호출·스트리밍은 LiteLLM이 Anthropic↔OpenAI로 번역합니다. 대부분 정상
   동작하지만 포맷 차이로 드물게 엣지 케이스가 있을 수 있으니 이상 시 `proxy.log`를
   먼저 확인하세요.
