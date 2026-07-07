@@ -9,7 +9,7 @@
 1. **Python 에이전트 샘플** — Microsoft Agent Framework로 Databricks의 Claude Opus 4.8을
    호출하는 최소 예제(`src/agent_sample.py`). 아래 **§0~§4**로 바로 실습할 수 있습니다.
 2. **Claude Code 백엔드 연결** — 터미널 코딩 CLI [Claude Code](https://code.claude.com/)의
-   LLM을 이 Databricks Claude 엔드포인트로 설정합니다(로컬 LiteLLM 프록시, macOS/Windows
+   LLM을 이 Databricks Claude 엔드포인트로 설정합니다(로컬 LiteLLM 프록시, macOS·Linux·Windows
    원클릭 설치기). → [docs/claude-code-databricks.md](docs/claude-code-databricks.md)
 
 Databricks Foundation Model API의 Anthropic 모델은 OpenAI Chat Completions와
