@@ -182,7 +182,10 @@ scripts/setup_claude_code_databricks.sh
     "ANTHROPIC_BASE_URL": "http://127.0.0.1:4000",
     "ANTHROPIC_AUTH_TOKEN": "sk-databricks-local",
     "ANTHROPIC_MODEL": "databricks-claude-opus-4-8",
-    "ANTHROPIC_SMALL_FAST_MODEL": "databricks-claude-haiku-4-5"
+    "ANTHROPIC_SMALL_FAST_MODEL": "databricks-claude-haiku-4-5",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-4-8",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "databricks-claude-sonnet-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-4-5"
   }
 }
 ```
@@ -202,6 +205,11 @@ scripts/setup_claude_code_databricks.sh
   `/model databricks-claude-sonnet-5`). 등록 목록은 `DATABRICKS_MODELS`로 바꿉니다.
   > catch-all `*`은 **등록되지 않은** 모델명만 기본 메인으로 보냅니다. 그래서
   > `/model`로 전환하려는 모델은 반드시 `config.yaml`에 등록돼 있어야 합니다.
+- `ANTHROPIC_DEFAULT_OPUS_MODEL` · `ANTHROPIC_DEFAULT_SONNET_MODEL` ·
+  `ANTHROPIC_DEFAULT_HAIKU_MODEL`은 `/model` 선택기의 **내장 Opus/Sonnet/Haiku
+  프리셋**을 각 Databricks 모델로 연결합니다. 프리셋을 고르면 Databricks 모델로
+  라우팅되고, 선택기에 `databricks-claude-*` id가 표시되어 **native Claude 모델과
+  구분**됩니다. (설치기가 `DATABRICKS_MODELS`에서 opus/sonnet/haiku를 자동 매핑)
 
 ---
 

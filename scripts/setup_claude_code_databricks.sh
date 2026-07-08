@@ -266,7 +266,21 @@ ok "wrote $PROXY_DIR/start-proxy.sh"
 log "5/7 Point Claude Code at the proxy ($CLAUDE_SETTINGS)"
 mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
 [ -f "$CLAUDE_SETTINGS" ] && cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS.bak.$(date +%s)" && ok "backed up existing settings"
+
+# Map the built-in opus/sonnet/haiku picker presets to the matching Databricks
+# models, so the /model selector shows and routes them as Databricks models.
+DEFAULT_OPUS=""; DEFAULT_SONNET=""; DEFAULT_HAIKU=""
+for _m in $MODELS $ENDPOINT $FAST_ENDPOINT; do
+  case "$_m" in
+    *opus*)   [ -n "$DEFAULT_OPUS" ]   || DEFAULT_OPUS="$_m" ;;
+    *sonnet*) [ -n "$DEFAULT_SONNET" ] || DEFAULT_SONNET="$_m" ;;
+    *haiku*)  [ -n "$DEFAULT_HAIKU" ]  || DEFAULT_HAIKU="$_m" ;;
+  esac
+done
+[ -n "$DEFAULT_HAIKU" ] || DEFAULT_HAIKU="$FAST_ENDPOINT"
+
 CLAUDE_SETTINGS="$CLAUDE_SETTINGS" PORT="$PORT" MASTER_KEY="$MASTER_KEY" ENDPOINT="$ENDPOINT" ENDPOINT_FAST="$FAST_ENDPOINT" \
+DEFAULT_OPUS="$DEFAULT_OPUS" DEFAULT_SONNET="$DEFAULT_SONNET" DEFAULT_HAIKU="$DEFAULT_HAIKU" \
 "$VENV/bin/python" - <<'PY'
 import json, os
 path = os.environ["CLAUDE_SETTINGS"]
@@ -282,6 +296,14 @@ env.update({
     "ANTHROPIC_MODEL": os.environ["ENDPOINT"],
     "ANTHROPIC_SMALL_FAST_MODEL": os.environ["ENDPOINT_FAST"],
 })
+# Point the built-in opus/sonnet/haiku picker presets at the Databricks models
+# so the /model selector shows and routes them as Databricks (not native).
+for _src, _var in (("DEFAULT_OPUS", "ANTHROPIC_DEFAULT_OPUS_MODEL"),
+                   ("DEFAULT_SONNET", "ANTHROPIC_DEFAULT_SONNET_MODEL"),
+                   ("DEFAULT_HAIKU", "ANTHROPIC_DEFAULT_HAIKU_MODEL")):
+    _v = os.environ.get(_src, "")
+    if _v:
+        env[_var] = _v
 data["env"] = env
 with open(path, "w") as f:
     json.dump(data, f, indent=2)

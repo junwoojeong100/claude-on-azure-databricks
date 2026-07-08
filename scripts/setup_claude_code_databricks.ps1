@@ -323,6 +323,19 @@ $env:CC_PORT = "$Port"
 $env:CC_KEY = $MasterKey
 $env:CC_ENDPOINT = $Endpoint
 $env:CC_ENDPOINT_FAST = $FastEndpoint
+# Map the built-in opus/sonnet/haiku picker presets to the matching Databricks
+# models, so the /model selector shows and routes them as Databricks models.
+$DefaultOpus = ''; $DefaultSonnet = ''; $DefaultHaiku = ''
+foreach ($m in (($Models -split '[,\s]+') + @($Endpoint, $FastEndpoint) | Where-Object { $_ -and $_.Trim() })) {
+    $m = $m.Trim()
+    if (-not $DefaultOpus   -and $m -like '*opus*')   { $DefaultOpus = $m }
+    if (-not $DefaultSonnet -and $m -like '*sonnet*') { $DefaultSonnet = $m }
+    if (-not $DefaultHaiku  -and $m -like '*haiku*')  { $DefaultHaiku = $m }
+}
+if (-not $DefaultHaiku) { $DefaultHaiku = $FastEndpoint }
+$env:CC_DEFAULT_OPUS = $DefaultOpus
+$env:CC_DEFAULT_SONNET = $DefaultSonnet
+$env:CC_DEFAULT_HAIKU = $DefaultHaiku
 $PyMerge = @'
 import json, os
 path = os.environ["CC_SETTINGS"]
@@ -338,6 +351,12 @@ env.update({
     "ANTHROPIC_MODEL": os.environ["CC_ENDPOINT"],
     "ANTHROPIC_SMALL_FAST_MODEL": os.environ["CC_ENDPOINT_FAST"],
 })
+for _src, _var in (("CC_DEFAULT_OPUS", "ANTHROPIC_DEFAULT_OPUS_MODEL"),
+                   ("CC_DEFAULT_SONNET", "ANTHROPIC_DEFAULT_SONNET_MODEL"),
+                   ("CC_DEFAULT_HAIKU", "ANTHROPIC_DEFAULT_HAIKU_MODEL")):
+    _v = os.environ.get(_src, "")
+    if _v:
+        env[_var] = _v
 data["env"] = env
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
