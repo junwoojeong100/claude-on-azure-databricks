@@ -38,6 +38,7 @@ param(
     [string]$ClaudeSettings = (Join-Path $env:USERPROFILE '.claude\settings.json'),
     [string]$Endpoint,
     [string]$FastEndpoint,
+    [string]$Models,
     [string]$EnvFile,
     [switch]$Force
 )
@@ -63,6 +64,12 @@ if (-not $Endpoint) {
 if (-not $FastEndpoint) {
     $FastEndpoint = if ($env:DATABRICKS_FAST_ENDPOINT) { $env:DATABRICKS_FAST_ENDPOINT } else { 'databricks-claude-haiku-4-5' }
 }
+# Selectable main models registered in the proxy so you can switch inside
+# Claude Code with `/model <name>`. Space- or comma-separated; override with
+# DATABRICKS_MODELS. The default main model is $Endpoint (ANTHROPIC_MODEL).
+if (-not $Models) {
+    $Models = if ($env:DATABRICKS_MODELS) { $env:DATABRICKS_MODELS } else { 'databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5' }
+}
 
 # ---------------------------------------------------------------------------
 Write-Step '1/7 Load Databricks credentials'
@@ -77,6 +84,7 @@ if (Test-Path $EnvFile) {
                 'DATABRICKS_TOKEN' { if (-not $DbxToken) { $DbxToken = $v } }
                 'DATABRICKS_SERVING_ENDPOINT' { if (-not $env:DATABRICKS_SERVING_ENDPOINT) { $Endpoint = $v } }
                 'DATABRICKS_FAST_ENDPOINT' { if (-not $env:DATABRICKS_FAST_ENDPOINT) { $FastEndpoint = $v } }
+                'DATABRICKS_MODELS' { if (-not $env:DATABRICKS_MODELS) { $Models = $v } }
             }
         }
     }
@@ -89,6 +97,7 @@ if (-not $DbxHost)  { Die 'DATABRICKS_HOST is required (in .env or the environme
 if (-not $DbxToken) { Die 'DATABRICKS_TOKEN is required (in .env or the environment)' }
 $ApiBase = $DbxHost.TrimEnd('/') + '/serving-endpoints'
 Write-Ok "endpoint: $Endpoint   fast: $FastEndpoint   base: $ApiBase"
+Write-Ok "selectable models (/model): $Models"
 
 # ---------------------------------------------------------------------------
 Write-Step '2/7 Preflight'
@@ -139,34 +148,37 @@ else {
 # ---------------------------------------------------------------------------
 Write-Step '4/7 Write proxy config, credentials, and start script'
 
-$FastEntry = ''
-if ($FastEndpoint -ne $Endpoint) {
-    $FastEntry = @"
-  # Small/fast "classifier" model Claude Code uses for background tasks
-  # (ANTHROPIC_SMALL_FAST_MODEL), routed to a lighter Databricks endpoint.
-  - model_name: $FastEndpoint
+# Register every selectable main model (plus the small/fast model) as its own
+# entry so Claude Code's /model <name> resolves each to the right Databricks
+# endpoint. De-duplicate, default first, fast last; the catch-all "*" then
+# routes any unrecognized name to the default main endpoint.
+$modelTokens = (@($Endpoint) + ($Models -split '[,\s]+') + @($FastEndpoint)) |
+    Where-Object { $_ -and $_.Trim() } | ForEach-Object { $_.Trim() }
+$reg = @()
+foreach ($m in $modelTokens) { if ($reg -notcontains $m) { $reg += $m } }
+
+$entryTemplate = @'
+  - model_name: __M__
     litellm_params:
-      model: databricks/$FastEndpoint
+      model: databricks/__M__
       api_key: os.environ/DATABRICKS_API_KEY
       api_base: os.environ/DATABRICKS_API_BASE
-"@
-}
+'@
+$ModelEntries = (($reg | ForEach-Object { $entryTemplate.Replace('__M__', $_) }) -join "`n")
+$regList = $reg -join ' '
 
 $Config = @"
 # LiteLLM proxy: exposes an Anthropic /v1/messages endpoint that Claude Code
-# talks to, and translates each request to the Azure Databricks serving
-# endpoints "$Endpoint" (main) and "$FastEndpoint" (small/fast). Credentials are
-# injected from the sibling .env at runtime (DATABRICKS_API_KEY /
+# talks to, and translates each request to Azure Databricks serving endpoints.
+# Registered models (switch inside Claude Code with /model <name>):
+#   $regList
+# Default main (ANTHROPIC_MODEL): $Endpoint
+# Small/fast classifier (ANTHROPIC_SMALL_FAST_MODEL): $FastEndpoint
+# Credentials are injected from the sibling .env at runtime (DATABRICKS_API_KEY /
 # DATABRICKS_API_BASE); no secrets live here.
 model_list:
-  - model_name: $Endpoint
-    litellm_params:
-      model: databricks/$Endpoint
-      api_key: os.environ/DATABRICKS_API_KEY
-      api_base: os.environ/DATABRICKS_API_BASE
-$FastEntry
-  # Catch-all: any other model name Claude Code may request is routed to the
-  # main Databricks endpoint.
+$ModelEntries
+  # Catch-all: any unrecognized model name is routed to the default main endpoint.
   - model_name: "*"
     litellm_params:
       model: databricks/$Endpoint
@@ -414,6 +426,25 @@ if ($AutoStart) {
                     Write-Note "small/fast model '$FastEndpoint' did not return an Anthropic message"
                 }
             }
+            foreach ($m in ($Models -split '[,\s]+' | Where-Object { $_ -and $_.Trim() })) {
+                $m = $m.Trim()
+                if ($m -ne $Endpoint -and $m -ne $FastEndpoint) {
+                    $bodyM = @{
+                        model      = $m
+                        max_tokens = 20
+                        messages   = @(@{ role = 'user'; content = 'Reply with: OK' })
+                    } | ConvertTo-Json -Depth 6
+                    $respM = Invoke-RestMethod "http://127.0.0.1:$Port/v1/messages" -Method Post `
+                        -Headers @{ Authorization = "Bearer $MasterKey"; 'anthropic-version' = '2023-06-01' } `
+                        -ContentType 'application/json' -Body $bodyM
+                    if ($respM.type -eq 'message') {
+                        Write-Ok "model '$m' round-trip OK (selectable via /model)"
+                    }
+                    else {
+                        Write-Note "model '$m' did not return an Anthropic message"
+                    }
+                }
+            }
         }
         catch {
             Write-Note "/v1/messages test failed: $($_.Exception.Message)"
@@ -424,6 +455,7 @@ if ($AutoStart) {
 Write-Host ''
 Write-Ok 'Done.'
 Write-Host '  - Open a new terminal and run:  claude'
+Write-Host "  - Switch model in Claude Code:  /model <name>   (registered: $Models)"
 Write-Host "  - Manual start (if the task is off):  `"$PsExe`" -File `"$StartScript`""
 Write-Host "  - Manage task:  Get-ScheduledTask -TaskName '$TaskName' ; Stop-ScheduledTask -TaskName '$TaskName'"
 Write-Host "  - Logs:  $LogPath"

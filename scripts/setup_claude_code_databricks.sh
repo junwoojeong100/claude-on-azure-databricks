@@ -36,6 +36,10 @@ ENDPOINT="${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-4-8}"
 # Small/fast "classifier" model Claude Code uses for background tasks
 # (ANTHROPIC_SMALL_FAST_MODEL); a lighter/cheaper endpoint than the main one.
 FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-databricks-claude-haiku-4-5}"
+# Selectable main models registered in the proxy so you can switch inside
+# Claude Code with `/model <name>`. Space- or comma-separated; override with
+# DATABRICKS_MODELS. The default main model is ENDPOINT (ANTHROPIC_MODEL) above.
+MODELS="${DATABRICKS_MODELS:-databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5}"
 FORCE="${FORCE:-0}"                                   # 1=reinstall litellm
 
 set -euo pipefail
@@ -62,8 +66,11 @@ fi
 : "${DATABRICKS_TOKEN:?DATABRICKS_TOKEN is required (in .env or the environment)}"
 ENDPOINT="${DATABRICKS_SERVING_ENDPOINT:-$ENDPOINT}"
 FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-$FAST_ENDPOINT}"
+MODELS="${DATABRICKS_MODELS:-$MODELS}"
+MODELS="${MODELS//,/ }"
 API_BASE="${DATABRICKS_HOST%/}/serving-endpoints"
 ok "endpoint: $ENDPOINT   fast: $FAST_ENDPOINT   base: $API_BASE"
+ok "selectable models (/model): $MODELS"
 
 # ---------------------------------------------------------------------------
 log "2/7 Preflight"
@@ -101,37 +108,39 @@ fi
 # ---------------------------------------------------------------------------
 log "4/7 Write proxy config, credentials, and start script"
 
-# Optional explicit entry for the small/fast "classifier" model. Skipped when it
-# equals the main endpoint, since the catch-all already routes it there.
-FAST_ENTRY=""
-if [ "$FAST_ENDPOINT" != "$ENDPOINT" ]; then
-  FAST_ENTRY=$(cat <<EOF
-  # Small/fast "classifier" model Claude Code uses for background tasks
-  # (ANTHROPIC_SMALL_FAST_MODEL) — routed to a lighter Databricks endpoint.
-  - model_name: $FAST_ENDPOINT
+# Register every selectable main model (plus the small/fast model) as its own
+# entry so Claude Code's `/model <name>` resolves each to the right Databricks
+# endpoint. De-duplicate, default first, fast last; the catch-all "*" then
+# routes any unrecognized name to the default main endpoint.
+REG=""
+_add_model() { case " $REG " in *" $1 "*) ;; *) REG="$REG $1" ;; esac; }
+_add_model "$ENDPOINT"
+for _m in $MODELS; do _add_model "$_m"; done
+_add_model "$FAST_ENDPOINT"
+
+MODEL_ENTRIES=""
+for _m in $REG; do
+  MODEL_ENTRIES="${MODEL_ENTRIES}  - model_name: ${_m}
     litellm_params:
-      model: databricks/$FAST_ENDPOINT
+      model: databricks/${_m}
       api_key: os.environ/DATABRICKS_API_KEY
       api_base: os.environ/DATABRICKS_API_BASE
-EOF
-)
-fi
+"
+done
+MODEL_ENTRIES="${MODEL_ENTRIES%$'\n'}"
 
 cat > "$PROXY_DIR/config.yaml" <<EOF
 # LiteLLM proxy: exposes an Anthropic /v1/messages endpoint that Claude Code
-# talks to, and translates each request to the Azure Databricks serving
-# endpoints "$ENDPOINT" (main) and "$FAST_ENDPOINT" (small/fast). Credentials
-# are injected from $PROXY_DIR/.env at runtime (DATABRICKS_API_KEY /
+# talks to, and translates each request to Azure Databricks serving endpoints.
+# Registered models (switch inside Claude Code with \`/model <name>\`):
+#   ${REG# }
+# Default main (ANTHROPIC_MODEL): $ENDPOINT
+# Small/fast classifier (ANTHROPIC_SMALL_FAST_MODEL): $FAST_ENDPOINT
+# Credentials are injected from $PROXY_DIR/.env at runtime (DATABRICKS_API_KEY /
 # DATABRICKS_API_BASE); no secrets live here.
 model_list:
-  - model_name: $ENDPOINT
-    litellm_params:
-      model: databricks/$ENDPOINT
-      api_key: os.environ/DATABRICKS_API_KEY
-      api_base: os.environ/DATABRICKS_API_BASE
-$FAST_ENTRY
-  # Catch-all: any other model name Claude Code may request is routed to the
-  # main Databricks endpoint.
+$MODEL_ENTRIES
+  # Catch-all: any unrecognized model name is routed to the default main endpoint.
   - model_name: "*"
     litellm_params:
       model: databricks/$ENDPOINT
@@ -356,11 +365,27 @@ if [ "$AUTOSTART" = "1" ]; then
       echo "    $RESP_FAST"
     fi
   fi
+  # Round-trip each additional selectable model so `/model <name>` is proven.
+  for _m in $MODELS; do
+    [ "$_m" = "$ENDPOINT" ] && continue
+    [ "$_m" = "$FAST_ENDPOINT" ] && continue
+    RESP_M="$(curl -s "http://127.0.0.1:$PORT/v1/messages" \
+      -H "Authorization: Bearer $MASTER_KEY" -H "Content-Type: application/json" \
+      -H "anthropic-version: 2023-06-01" \
+      -d "{\"model\":\"$_m\",\"max_tokens\":20,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with: OK\"}]}")"
+    if echo "$RESP_M" | grep -q '"type": *"message"'; then
+      ok "model '$_m' round-trip OK (selectable via /model)"
+    else
+      warn "model '$_m' did not return an Anthropic message. Response:"
+      echo "    $RESP_M"
+    fi
+  done
 fi
 
 echo
 ok "Done."
 echo "  • Open a new terminal and run:  claude"
+echo "  • Switch model in Claude Code:  /model <name>   (registered: $MODELS)"
 echo "  • Manual start (if service is off):  $PROXY_DIR/start-proxy.sh"
 echo "  • Logs:  $PROXY_DIR/proxy.log"
 echo "  • Docs:  docs/claude-code-databricks.md"

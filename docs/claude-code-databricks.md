@@ -157,6 +157,7 @@ scripts/setup_claude_code_databricks.sh
 | `ENV_FILE` | 리포 `.env` | 자격증명 소스 파일 |
 | `FORCE` | `0` | `1`이면 litellm 재설치 |
 | `DATABRICKS_FAST_ENDPOINT` | `databricks-claude-haiku-4-5` | 분류기(small/fast) 모델 엔드포인트 |
+| `DATABRICKS_MODELS` | opus-4-8, sonnet-5, haiku-4-5 | 프록시에 등록할 **선택 가능한 메인 모델** 목록(공백/콤마 구분). Claude Code `/model <이름>`으로 전환 |
 
 ---
 
@@ -164,8 +165,8 @@ scripts/setup_claude_code_databricks.sh
 
 | 위치 | 역할 |
 | --- | --- |
-| `~/.claude-databricks/config.yaml` | LiteLLM 라우팅(메인 엔드포인트 + 분류기(small/fast) 엔드포인트 + 와일드카드 `*` → `databricks/<endpoint>`) |
-| `~/.claude-databricks/custom_handlers.py` | 프리콜 훅 — Databricks가 거부하는 `thinking_blocks`/`reasoning_content` 제거 |
+| `~/.claude-databricks/config.yaml` | LiteLLM 라우팅. 선택 가능한 메인 모델들(기본: Opus 4.8 · Sonnet 5 · Haiku 4.5) + 분류기(small/fast) + 와일드카드 `*`를 각 `databricks/<endpoint>`로 매핑 |
+| `~/.claude-databricks/custom_handlers.py` | 프리콜 훅 — Databricks가 거부하는 `thinking_blocks`/`reasoning_content` 제거 + `stop_sequences` → `stop` 변환 |
 | `~/.claude-databricks/.env` (0600) | 프록시 전용 자격증명(`DATABRICKS_API_KEY`/`DATABRICKS_API_BASE`/`LITELLM_MASTER_KEY`) |
 | `~/.claude-databricks/start-proxy.sh` (Windows는 `start-proxy.ps1`) | 프록시 실행 스크립트 |
 | `~/.claude-databricks/.venv/` | LiteLLM 전용 파이썬 환경 |
@@ -194,6 +195,13 @@ scripts/setup_claude_code_databricks.sh
   가벼운 백그라운드 작업에 쓰는 **small/fast 모델**입니다. 기본값은 가벼운
   `databricks-claude-haiku-4-5`이며 `DATABRICKS_FAST_ENDPOINT`로 바꿀 수 있습니다.
   이 값은 Claude Code 시작 시 로드되므로, 변경하면 Claude Code를 재시작해야 반영됩니다.
+- `ANTHROPIC_MODEL`은 **기본 메인 모델**입니다. 설치기는 선택 가능한 메인 모델
+  (기본: `databricks-claude-opus-4-8` · `databricks-claude-sonnet-5` ·
+  `databricks-claude-haiku-4-5`)을 모두 `config.yaml`에 등록하므로, Claude Code
+  안에서 **`/model <이름>`**으로 실행 중에 전환할 수 있습니다(예:
+  `/model databricks-claude-sonnet-5`). 등록 목록은 `DATABRICKS_MODELS`로 바꿉니다.
+  > catch-all `*`은 **등록되지 않은** 모델명만 기본 메인으로 보냅니다. 그래서
+  > `/model`로 전환하려는 모델은 반드시 `config.yaml`에 등록돼 있어야 합니다.
 
 ---
 
@@ -220,19 +228,24 @@ umask 022
 # 3) 라우팅 설정
 cat > config.yaml <<'EOF'
 model_list:
-  # 메인 모델 (ANTHROPIC_MODEL)
+  # 선택 가능한 메인 모델 (Claude Code /model <이름>으로 전환; ANTHROPIC_MODEL이 기본)
   - model_name: databricks-claude-opus-4-8
     litellm_params:
       model: databricks/databricks-claude-opus-4-8
       api_key: os.environ/DATABRICKS_API_KEY
       api_base: os.environ/DATABRICKS_API_BASE
-  # 분류기(small/fast) 모델 (ANTHROPIC_SMALL_FAST_MODEL)
+  - model_name: databricks-claude-sonnet-5
+    litellm_params:
+      model: databricks/databricks-claude-sonnet-5
+      api_key: os.environ/DATABRICKS_API_KEY
+      api_base: os.environ/DATABRICKS_API_BASE
+  # 분류기(small/fast) 모델 (ANTHROPIC_SMALL_FAST_MODEL) — Haiku 4.5는 메인 선택지로도 사용 가능
   - model_name: databricks-claude-haiku-4-5
     litellm_params:
       model: databricks/databricks-claude-haiku-4-5
       api_key: os.environ/DATABRICKS_API_KEY
       api_base: os.environ/DATABRICKS_API_BASE
-  # 그 외 모델명은 모두 메인 엔드포인트로
+  # 등록되지 않은 모델명은 모두 기본 메인 엔드포인트로
   - model_name: "*"
     litellm_params:
       model: databricks/databricks-claude-opus-4-8

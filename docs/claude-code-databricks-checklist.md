@@ -90,6 +90,12 @@ Databricks 연결 시 **두 가지 함정**이 있습니다.
 | `ANTHROPIC_MODEL` | 메인 엔드포인트 | `config.yaml`의 `databricks/<endpoint>`와 이름 일치 |
 | `ANTHROPIC_SMALL_FAST_MODEL` | **분류기용 경량 모델** | Haiku 권장. `config.yaml`에 명시 엔트리 필요(1-A) |
 
+> **여러 모델 선택/전환**: 설치기는 선택 가능한 메인 모델(기본 **Opus 4.8 · Sonnet 5 ·
+> Haiku 4.5**, 모두 최신)을 `config.yaml`에 모두 등록합니다. 그래서 Claude Code 안에서
+> **`/model <이름>`**으로 실행 중 전환할 수 있습니다(예: `/model databricks-claude-sonnet-5`).
+> `ANTHROPIC_MODEL`은 시작 시 기본값일 뿐이며, 등록 목록은 `DATABRICKS_MODELS`로 바꿉니다.
+> ⚠️ catch-all은 **등록된** 모델명만 올바로 라우팅하므로 전환 대상은 반드시 등록돼 있어야 합니다.
+
 ---
 
 ## 5. 프록시 운영 주의
@@ -109,5 +115,6 @@ Databricks 연결 시 **두 가지 함정**이 있습니다.
 - [ ] Claude 엔드포인트 배포 + CAN QUERY PAT 확보
 - [ ] LiteLLM 프록시 구동 + 훅에서 `thinking_blocks` 제거 / `stop_sequences` → `stop` 변환
 - [ ] **분류기 모델을 `config.yaml`에 명시 등록**(catch-all 회피) + `ANTHROPIC_SMALL_FAST_MODEL` 지정
+- [ ] (선택) **여러 메인 모델 등록**(Opus 4.8 · Sonnet 5 · Haiku 4.5) → Claude Code `/model <이름>`으로 전환
 - [ ] `settings.json` env 구성 후 **Claude Code 재시작**
 - [ ] `stop_sequences` 포함 요청으로 메인·분류기 왕복 검증(둘 다 `type:"message"` 응답)
