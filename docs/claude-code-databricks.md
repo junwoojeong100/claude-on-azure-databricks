@@ -14,6 +14,9 @@ Claude Code ──(Anthropic /v1/messages)──► LiteLLM 프록시 ──(Ope
 전체 과정을 자동화할 수 있고, 원리를 이해하며 직접 하려면 [§5 수동 설치](#5-수동-설치-원리-이해용)를
 따르세요.
 
+> 📋 요건·주의사항을 빠르게 훑거나 동료·고객·파트너에게 **사전 공유**하려면
+> [`claude-code-databricks-checklist.md`](./claude-code-databricks-checklist.md)를 참고하세요.
+
 > 이 문서는 **Claude Code**(터미널 CLI)를 Databricks에 연결하는 내용입니다.
 > Databricks의 Claude를 **파이썬 코드**에서 직접 호출하는 최소 샘플은 이 리포의
 > [`README.md`](../README.md)와 `src/agent_sample.py`를 참고하세요.
