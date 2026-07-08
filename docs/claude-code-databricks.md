@@ -158,6 +158,7 @@ scripts/setup_claude_code_databricks.sh
 | `FORCE` | `0` | `1`이면 litellm 재설치 |
 | `DATABRICKS_FAST_ENDPOINT` | `databricks-claude-haiku-4-5` | 분류기(small/fast) 모델 엔드포인트 |
 | `DATABRICKS_MODELS` | opus-4-8, sonnet-5, haiku-4-5 | 프록시에 등록할 **선택 가능한 메인 모델** 목록(공백/콤마 구분). Claude Code `/model <이름>`으로 전환 |
+| `STATUSLINE` | `1` | `0`이면 Databricks 상태줄(status line)을 설치하지 않음 |
 
 ---
 
@@ -172,7 +173,8 @@ scripts/setup_claude_code_databricks.sh
 | `~/.claude-databricks/.venv/` | LiteLLM 전용 파이썬 환경 |
 | `~/.claude-databricks/proxy.log` | 실행/요청 로그 |
 | `~/Library/LaunchAgents/com.databricks.claude-proxy.plist` | (macOS) 자동 시작 서비스 — Windows는 작업 스케줄러 `ClaudeDatabricksProxy` |
-| `~/.claude/settings.json` | Claude Code를 프록시로 향하게 하는 `env` 블록 |
+| `~/.claude/settings.json` | Claude Code를 프록시로 향하게 하는 `env`(및 `statusLine`) 블록 |
+| `~/.claude/statusline-databricks.py` | 상태줄 스크립트 — 모델 이름 옆에 `[Databricks]` 배지 + 전체 엔드포인트 id 표시(다른 모델과 구분) |
 
 `~/.claude/settings.json`의 `env` 블록:
 
@@ -202,6 +204,16 @@ scripts/setup_claude_code_databricks.sh
   `/model databricks-claude-sonnet-5`). 등록 목록은 `DATABRICKS_MODELS`로 바꿉니다.
   > catch-all `*`은 **등록되지 않은** 모델명만 기본 메인으로 보냅니다. 그래서
   > `/model`로 전환하려는 모델은 반드시 `config.yaml`에 등록돼 있어야 합니다.
+
+### 상태줄(status line) — Databricks 모델 배지
+
+설치기는 Claude Code 하단에 **모델 이름 옆에 `[Databricks]` 배지 + 전체 엔드포인트
+id**를 보여주는 상태줄을 설정합니다(예: `[Databricks] databricks-claude-sonnet-5 |
+<폴더> | 12% ctx`). Databricks 호스팅 모델을 다른 모델과 한눈에 구분할 수 있습니다.
+
+- 스크립트: `~/.claude/statusline-databricks.py`, 설정: `settings.json`의 `statusLine`.
+- 기존 `statusLine`이 있으면 **덮어쓰지 않습니다**. 끄려면 `STATUSLINE=0`으로 설치하세요.
+- 변경은 Claude Code의 다음 상호작용부터 반영됩니다(재시작 불필요).
 
 ---
 

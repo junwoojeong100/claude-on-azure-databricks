@@ -96,6 +96,10 @@ Databricks 연결 시 **두 가지 함정**이 있습니다.
 > `ANTHROPIC_MODEL`은 시작 시 기본값일 뿐이며, 등록 목록은 `DATABRICKS_MODELS`로 바꿉니다.
 > ⚠️ catch-all은 **등록된** 모델명만 올바로 라우팅하므로 전환 대상은 반드시 등록돼 있어야 합니다.
 
+> **상태줄(status line)**: 설치기가 Claude Code 하단에 모델 이름 옆으로 `[Databricks]` 배지 +
+> 전체 엔드포인트 id를 표시해 Databricks 모델을 다른 모델과 한눈에 구분합니다
+> (`~/.claude/statusline-databricks.py`, 기존 `statusLine`은 보존, `STATUSLINE=0`으로 끄기).
+
 ---
 
 ## 5. 프록시 운영 주의

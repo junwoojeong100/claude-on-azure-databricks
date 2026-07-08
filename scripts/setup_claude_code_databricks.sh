@@ -41,6 +41,7 @@ FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-databricks-claude-haiku-4-5}"
 # DATABRICKS_MODELS. The default main model is ENDPOINT (ANTHROPIC_MODEL) above.
 MODELS="${DATABRICKS_MODELS:-databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5}"
 FORCE="${FORCE:-0}"                                   # 1=reinstall litellm
+STATUSLINE="${STATUSLINE:-1}"                          # 1=add a Databricks status line to Claude Code
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -266,7 +267,61 @@ ok "wrote $PROXY_DIR/start-proxy.sh"
 log "5/7 Point Claude Code at the proxy ($CLAUDE_SETTINGS)"
 mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
 [ -f "$CLAUDE_SETTINGS" ] && cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS.bak.$(date +%s)" && ok "backed up existing settings"
+
+# Optional status line: badges Databricks-hosted models and shows the full
+# endpoint id so they stand out from other Claude models.
+SETTINGS_DIR="$(dirname "$CLAUDE_SETTINGS")"
+STATUSLINE_SCRIPT="$SETTINGS_DIR/statusline-databricks.py"
+if [ "$STATUSLINE" = "1" ]; then
+  cat > "$STATUSLINE_SCRIPT" <<'PYEOF'
+#!/usr/bin/env python3
+"""Claude Code status line for the Databricks proxy setup.
+
+Badges Databricks-hosted models and shows the full Databricks endpoint id
+(e.g. databricks-claude-opus-4-8) so they are easy to tell apart from other
+Claude models. Reads Claude Code's session JSON on stdin; prints one line.
+"""
+import json
+import os
+import sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    data = {}
+
+model = data.get("model") or {}
+model_id = model.get("id") or ""
+display = model.get("display_name") or model_id
+workspace = data.get("workspace") or {}
+cwd = workspace.get("current_dir") or data.get("cwd") or ""
+folder = os.path.basename(cwd.rstrip("/")) if cwd else ""
+pct = (data.get("context_window") or {}).get("used_percentage")
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+DBX = "\033[1;38;5;202m"  # Databricks brand orange-red
+
+if model_id.startswith("databricks-"):
+    model_seg = f"{DBX}[Databricks]{RESET} {BOLD}{model_id}{RESET}"
+else:
+    model_seg = f"{BOLD}{display}{RESET}"
+
+parts = [model_seg]
+if folder:
+    parts.append(f"{DIM}{folder}{RESET}")
+if isinstance(pct, (int, float)):
+    parts.append(f"{DIM}{int(pct)}% ctx{RESET}")
+
+print(" | ".join(parts))
+PYEOF
+  chmod +x "$STATUSLINE_SCRIPT"
+  ok "wrote $STATUSLINE_SCRIPT"
+fi
+
 CLAUDE_SETTINGS="$CLAUDE_SETTINGS" PORT="$PORT" MASTER_KEY="$MASTER_KEY" ENDPOINT="$ENDPOINT" ENDPOINT_FAST="$FAST_ENDPOINT" \
+STATUSLINE="$STATUSLINE" STATUSLINE_SCRIPT="$STATUSLINE_SCRIPT" \
 "$VENV/bin/python" - <<'PY'
 import json, os
 path = os.environ["CLAUDE_SETTINGS"]
@@ -283,6 +338,13 @@ env.update({
     "ANTHROPIC_SMALL_FAST_MODEL": os.environ["ENDPOINT_FAST"],
 })
 data["env"] = env
+# Only set a status line if the user does not already have one.
+if os.environ.get("STATUSLINE") == "1" and "statusLine" not in data:
+    data["statusLine"] = {
+        "type": "command",
+        "command": 'python3 "' + os.environ["STATUSLINE_SCRIPT"] + '"',
+        "padding": 0,
+    }
 with open(path, "w") as f:
     json.dump(data, f, indent=2)
     f.write("\n")

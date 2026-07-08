@@ -39,6 +39,7 @@ param(
     [string]$Endpoint,
     [string]$FastEndpoint,
     [string]$Models,
+    [bool]$StatusLine = $true,
     [string]$EnvFile,
     [switch]$Force
 )
@@ -318,6 +319,60 @@ if (Test-Path $ClaudeSettings) {
     Copy-Item $ClaudeSettings "$ClaudeSettings.bak.$(Get-Date -Format 'yyyyMMddHHmmss')"
     Write-Ok 'backed up existing settings'
 }
+
+# Optional status line: badges Databricks-hosted models and shows the full
+# endpoint id so they stand out from other Claude models.
+$StatusLineScript = Join-Path $SettingsDir 'statusline-databricks.py'
+if ($StatusLine) {
+    $StatusLineBody = @'
+#!/usr/bin/env python3
+"""Claude Code status line for the Databricks proxy setup.
+
+Badges Databricks-hosted models and shows the full Databricks endpoint id
+(e.g. databricks-claude-opus-4-8) so they are easy to tell apart from other
+Claude models. Reads Claude Code's session JSON on stdin; prints one line.
+"""
+import json
+import os
+import sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    data = {}
+
+model = data.get("model") or {}
+model_id = model.get("id") or ""
+display = model.get("display_name") or model_id
+workspace = data.get("workspace") or {}
+cwd = workspace.get("current_dir") or data.get("cwd") or ""
+folder = os.path.basename(cwd.rstrip("/")) if cwd else ""
+pct = (data.get("context_window") or {}).get("used_percentage")
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+DIM = "\033[2m"
+DBX = "\033[1;38;5;202m"  # Databricks brand orange-red
+
+if model_id.startswith("databricks-"):
+    model_seg = f"{DBX}[Databricks]{RESET} {BOLD}{model_id}{RESET}"
+else:
+    model_seg = f"{BOLD}{display}{RESET}"
+
+parts = [model_seg]
+if folder:
+    parts.append(f"{DIM}{folder}{RESET}")
+if isinstance(pct, (int, float)):
+    parts.append(f"{DIM}{int(pct)}% ctx{RESET}")
+
+print(" | ".join(parts))
+'@
+    Set-Content -Path $StatusLineScript -Value $StatusLineBody -Encoding utf8
+    Write-Ok "wrote $StatusLineScript"
+}
+$env:CC_STATUSLINE = if ($StatusLine) { '1' } else { '0' }
+$env:CC_STATUSLINE_PY = $VenvPy
+$env:CC_STATUSLINE_SCRIPT = $StatusLineScript
 $env:CC_SETTINGS = $ClaudeSettings
 $env:CC_PORT = "$Port"
 $env:CC_KEY = $MasterKey
@@ -339,6 +394,12 @@ env.update({
     "ANTHROPIC_SMALL_FAST_MODEL": os.environ["CC_ENDPOINT_FAST"],
 })
 data["env"] = env
+if os.environ.get("CC_STATUSLINE") == "1" and "statusLine" not in data:
+    data["statusLine"] = {
+        "type": "command",
+        "command": '"' + os.environ["CC_STATUSLINE_PY"] + '" "' + os.environ["CC_STATUSLINE_SCRIPT"] + '"',
+        "padding": 0,
+    }
 with open(path, "w", encoding="utf-8") as f:
     json.dump(data, f, indent=2)
     f.write("\n")
