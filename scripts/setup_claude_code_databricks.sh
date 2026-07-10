@@ -1,50 +1,45 @@
 #!/usr/bin/env bash
 #
-# Bridge the Claude Code CLI to an Azure Databricks-hosted Claude model.
+# Configure Claude Code to call Azure Databricks' native Anthropic Messages API.
 #
-# Claude Code speaks only the Anthropic Messages API (POST /v1/messages,
-# Anthropic-shaped responses). Databricks Model Serving speaks the OpenAI
-# Chat Completions schema at /serving-endpoints/<name>/invocations. This
-# script installs a small local LiteLLM proxy that translates between the two,
-# then points Claude Code at it via ~/.claude/settings.json.
+# No local proxy is required:
 #
-#   Claude Code ──(/v1/messages)──► LiteLLM (127.0.0.1:PORT) ──► Databricks
+#   Claude Code ──(Anthropic /v1/messages)──► Azure Databricks Model Serving
+#                    /serving-endpoints/anthropic
 #
-# It is idempotent: safe to re-run. Credentials are read from the repo .env
-# (or the environment) and written only to <proxy-dir>/.env with 0600 perms.
+# The script:
+#   1. Loads Databricks credentials from .env or the environment.
+#   2. Verifies the native Anthropic endpoint.
+#   3. Stores the Databricks token in a 0600 file outside Claude settings.
+#   4. Configures Claude Code with an apiKeyHelper and model aliases.
+#   5. Disables the legacy LiteLLM auto-start service if present.
+#   6. Runs a Claude Code end-to-end test.
 #
 # Usage:
 #   scripts/setup_claude_code_databricks.sh
 #
-#   # credentials from the environment instead of .env:
 #   DATABRICKS_HOST=https://adb-xxx.azuredatabricks.net \
 #   DATABRICKS_TOKEN=dapi... \
 #   DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8 \
 #   scripts/setup_claude_code_databricks.sh
 #
-#   # install without a background service (start it yourself later):
-#   AUTOSTART=0 scripts/setup_claude_code_databricks.sh
-#
-# Configurable via environment variables (defaults shown):
-PROXY_DIR="${PROXY_DIR:-$HOME/.claude-databricks}"   # where the proxy lives
-PORT="${PORT:-4000}"                                  # local proxy port
-MASTER_KEY="${MASTER_KEY:-sk-databricks-local}"       # local-only proxy key
-AUTOSTART="${AUTOSTART:-1}"                            # 1=install a service
-LAUNCHD_LABEL="${LAUNCHD_LABEL:-com.databricks.claude-proxy}"
-CLAUDE_SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
-ENDPOINT="${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-4-8}"
-# Small/fast "classifier" model Claude Code uses for background tasks
-# (ANTHROPIC_SMALL_FAST_MODEL); a lighter/cheaper endpoint than the main one.
-FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-databricks-claude-haiku-4-5}"
-# Selectable main models registered in the proxy so you can switch inside
-# Claude Code with `/model <name>`. Space- or comma-separated; override with
-# DATABRICKS_MODELS. The default main model is ENDPOINT (ANTHROPIC_MODEL) above.
-MODELS="${DATABRICKS_MODELS:-databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5}"
-FORCE="${FORCE:-0}"                                   # 1=reinstall litellm
+# Configurable environment variables:
+#   STATE_DIR                 Credential/helper directory
+#                             (default: ~/.claude-databricks)
+#   CLAUDE_SETTINGS           Claude Code settings path
+#                             (default: ~/.claude/settings.json)
+#   ENV_FILE                  Credential source (default: repo .env)
+#   DATABRICKS_FAST_ENDPOINT  Claude Code small/fast model
+#   DATABRICKS_MODELS         Models used to map /model family presets
+#   LEGACY_LAUNCHD_LABEL      Previous LiteLLM launchd label
 
 set -euo pipefail
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+STATE_DIR="${STATE_DIR:-${PROXY_DIR:-$HOME/.claude-databricks}}"
+CLAUDE_SETTINGS="${CLAUDE_SETTINGS:-$HOME/.claude/settings.json}"
 ENV_FILE="${ENV_FILE:-$ROOT/.env}"
+LEGACY_LAUNCHD_LABEL="${LEGACY_LAUNCHD_LABEL:-com.databricks.claude-proxy}"
 
 c_reset=$'\033[0m'; c_blue=$'\033[1;34m'; c_green=$'\033[1;32m'
 c_yellow=$'\033[1;33m'; c_red=$'\033[1;31m'
@@ -53,361 +48,322 @@ ok()   { printf "%s ok %s %s\n" "$c_green"  "$c_reset" "$*"; }
 warn() { printf "%s[!]%s %s\n"  "$c_yellow" "$c_reset" "$*"; }
 die()  { printf "%s[x]%s %s\n"  "$c_red"    "$c_reset" "$*" >&2; exit 1; }
 
-# ---------------------------------------------------------------------------
-log "1/7 Load Databricks credentials"
-if [ -f "$ENV_FILE" ]; then
-  # shellcheck disable=SC1090
-  set -a; . "$ENV_FILE"; set +a
-  ok "loaded $ENV_FILE"
-else
-  warn "no $ENV_FILE — expecting DATABRICKS_HOST/DATABRICKS_TOKEN in the environment"
-fi
-: "${DATABRICKS_HOST:?DATABRICKS_HOST is required (in .env or the environment)}"
-: "${DATABRICKS_TOKEN:?DATABRICKS_TOKEN is required (in .env or the environment)}"
-ENDPOINT="${DATABRICKS_SERVING_ENDPOINT:-$ENDPOINT}"
-FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-$FAST_ENDPOINT}"
-MODELS="${DATABRICKS_MODELS:-$MODELS}"
-MODELS="${MODELS//,/ }"
-API_BASE="${DATABRICKS_HOST%/}/serving-endpoints"
-ok "endpoint: $ENDPOINT   fast: $FAST_ENDPOINT   base: $API_BASE"
-ok "selectable models (/model): $MODELS"
-
-# ---------------------------------------------------------------------------
-log "2/7 Preflight"
-command -v claude >/dev/null 2>&1 \
-  && ok "claude CLI: $(claude --version 2>/dev/null | head -1)" \
-  || warn "claude CLI not on PATH — install it, then re-run (setup still continues)"
-
-if command -v uv >/dev/null 2>&1; then
-  INSTALLER="uv"; ok "using uv for the Python environment"
-elif command -v python3.12 >/dev/null 2>&1 || command -v python3 >/dev/null 2>&1; then
-  INSTALLER="venv"; ok "using python venv + pip"
-else
-  die "need either 'uv' or 'python3' to create the proxy environment"
-fi
-
-# ---------------------------------------------------------------------------
-log "3/7 Proxy environment at $PROXY_DIR"
-mkdir -p "$PROXY_DIR"
-VENV="$PROXY_DIR/.venv"
-if [ -x "$VENV/bin/litellm" ] && [ "$FORCE" != "1" ]; then
-  ok "litellm already installed (FORCE=1 to reinstall)"
-else
-  if [ "$INSTALLER" = "uv" ]; then
-    [ -d "$VENV" ] || uv venv "$VENV" --python 3.12
-    uv pip install --python "$VENV/bin/python" --quiet "litellm[proxy]"
-  else
-    PYBIN="$(command -v python3.12 || command -v python3)"
-    [ -d "$VENV" ] || "$PYBIN" -m venv "$VENV"
-    "$VENV/bin/python" -m pip install --quiet --upgrade pip
-    "$VENV/bin/python" -m pip install --quiet "litellm[proxy]"
-  fi
-  ok "installed litellm[proxy]"
-fi
-
-# ---------------------------------------------------------------------------
-log "4/7 Write proxy config, credentials, and start script"
-
-# Register every selectable main model (plus the small/fast model) as its own
-# entry so Claude Code's `/model <name>` resolves each to the right Databricks
-# endpoint. De-duplicate, default first, fast last; the catch-all "*" then
-# routes any unrecognized name to the default main endpoint.
-REG=""
-_add_model() { case " $REG " in *" $1 "*) ;; *) REG="$REG $1" ;; esac; }
-_add_model "$ENDPOINT"
-for _m in $MODELS; do _add_model "$_m"; done
-_add_model "$FAST_ENDPOINT"
-
-MODEL_ENTRIES=""
-for _m in $REG; do
-  MODEL_ENTRIES="${MODEL_ENTRIES}  - model_name: ${_m}
-    litellm_params:
-      model: databricks/${_m}
-      api_key: os.environ/DATABRICKS_API_KEY
-      api_base: os.environ/DATABRICKS_API_BASE
-"
-done
-MODEL_ENTRIES="${MODEL_ENTRIES%$'\n'}"
-
-cat > "$PROXY_DIR/config.yaml" <<EOF
-# LiteLLM proxy: exposes an Anthropic /v1/messages endpoint that Claude Code
-# talks to, and translates each request to Azure Databricks serving endpoints.
-# Registered models (switch inside Claude Code with \`/model <name>\`):
-#   ${REG# }
-# Default main (ANTHROPIC_MODEL): $ENDPOINT
-# Small/fast classifier (ANTHROPIC_SMALL_FAST_MODEL): $FAST_ENDPOINT
-# Credentials are injected from $PROXY_DIR/.env at runtime (DATABRICKS_API_KEY /
-# DATABRICKS_API_BASE); no secrets live here.
-model_list:
-$MODEL_ENTRIES
-  # Catch-all: any unrecognized model name is routed to the default main endpoint.
-  - model_name: "*"
-    litellm_params:
-      model: databricks/$ENDPOINT
-      api_key: os.environ/DATABRICKS_API_KEY
-      api_base: os.environ/DATABRICKS_API_BASE
-
-litellm_settings:
-  # Silently drop provider-unsupported OpenAI params instead of erroring.
-  drop_params: true
-  # Strip Anthropic 'thinking' content Claude Code replays in history, which
-  # Databricks rejects ("messages.N.thinking_blocks: Extra inputs are not
-  # permitted"). See custom_handlers.py.
-  callbacks: custom_handlers.proxy_handler_instance
-
-general_settings:
-  master_key: os.environ/LITELLM_MASTER_KEY
-EOF
-ok "wrote $PROXY_DIR/config.yaml"
-
-# LiteLLM pre-call hook: make Claude Code requests Databricks-compatible —
-# strip replayed 'thinking' content and translate stop_sequences -> stop.
-cat > "$PROXY_DIR/custom_handlers.py" <<'PYEOF'
-"""LiteLLM proxy hook: make Claude Code requests compatible with Databricks.
-
-Two Anthropic-isms that the Databricks serving endpoint rejects are fixed here,
-in a single pre-call hook, before the upstream `/invocations` request:
-
-1. `thinking_blocks` / `reasoning_content` — Claude Code (extended thinking)
-   replays prior assistant 'thinking' blocks in the conversation history.
-   Databricks rejects them with
-   `messages.N.thinking_blocks: Extra inputs are not permitted`.
-
-2. `stop_sequences` — Claude Code (including its small/fast "classifier"
-   background calls) sends the Anthropic `stop_sequences` field. Databricks
-   rejects it with `Cannot specify parameter stop_sequences, use stop instead.`
-   so we translate it to the OpenAI-style `stop`.
-"""
-
-from litellm.integrations.custom_logger import CustomLogger
-
-_THINKING_TYPES = {"thinking", "redacted_thinking"}
-
-
-class DatabricksCompatHook(CustomLogger):
-    @staticmethod
-    def _fix_stop(container):
-        """Translate Anthropic `stop_sequences` to the OpenAI-style `stop`.
-
-        Databricks also rejects whitespace-only stop sequences, so drop those;
-        if none remain, omit `stop` entirely rather than send an invalid value.
-        """
-        if not isinstance(container, dict) or "stop_sequences" not in container:
-            return
-        seq = container.pop("stop_sequences")
-        if isinstance(seq, str):
-            seq = [seq]
-        if isinstance(seq, list):
-            seq = [s for s in seq if isinstance(s, str) and s.strip()]
-        else:
-            seq = None
-        if seq and not container.get("stop"):
-            container["stop"] = seq
-
-    def _clean(self, data):
-        if not isinstance(data, dict):
-            return data
-        # stop_sequences can sit at the top level and/or under optional_params.
-        self._fix_stop(data)
-        self._fix_stop(data.get("optional_params"))
-        messages = data.get("messages")
-        if isinstance(messages, list):
-            for msg in messages:
-                if not isinstance(msg, dict):
-                    continue
-                msg.pop("thinking_blocks", None)
-                msg.pop("reasoning_content", None)
-                content = msg.get("content")
-                if isinstance(content, list):
-                    filtered = [
-                        block
-                        for block in content
-                        if not (isinstance(block, dict) and block.get("type") in _THINKING_TYPES)
-                    ]
-                    # Never leave an assistant turn with empty content.
-                    msg["content"] = filtered if filtered else ""
-        return data
-
-    async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
-        return self._clean(data)
-
-
-proxy_handler_instance = DatabricksCompatHook()
-PYEOF
-ok "wrote $PROXY_DIR/custom_handlers.py"
-
-# Self-contained credentials for the proxy (not coupled to the repo location).
-umask 077
-cat > "$PROXY_DIR/.env" <<EOF
-# Auto-generated by setup_claude_code_databricks.sh — contains a secret.
-DATABRICKS_API_KEY=$DATABRICKS_TOKEN
-DATABRICKS_API_BASE=$API_BASE
-LITELLM_MASTER_KEY=$MASTER_KEY
-EOF
-chmod 600 "$PROXY_DIR/.env"
-umask 022
-ok "wrote $PROXY_DIR/.env (0600)"
-
-cat > "$PROXY_DIR/start-proxy.sh" <<EOF
-#!/usr/bin/env bash
-# Start the LiteLLM proxy bridging Claude Code to Azure Databricks.
-set -euo pipefail
-DIR="$PROXY_DIR"
-set -a
-# shellcheck disable=SC1091
-. "\$DIR/.env"
-set +a
-exec "\$DIR/.venv/bin/litellm" --config "\$DIR/config.yaml" --host 127.0.0.1 --port $PORT
-EOF
-chmod +x "$PROXY_DIR/start-proxy.sh"
-ok "wrote $PROXY_DIR/start-proxy.sh"
-
-# ---------------------------------------------------------------------------
-log "5/7 Point Claude Code at the proxy ($CLAUDE_SETTINGS)"
-mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
-[ -f "$CLAUDE_SETTINGS" ] && cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS.bak.$(date +%s)" && ok "backed up existing settings"
-
-# Map the built-in opus/sonnet/haiku picker presets to the matching Databricks
-# models, so the /model selector shows and routes them as Databricks models.
-DEFAULT_OPUS=""; DEFAULT_SONNET=""; DEFAULT_HAIKU=""
-for _m in $MODELS $ENDPOINT $FAST_ENDPOINT; do
-  case "$_m" in
-    *opus*)   [ -n "$DEFAULT_OPUS" ]   || DEFAULT_OPUS="$_m" ;;
-    *sonnet*) [ -n "$DEFAULT_SONNET" ] || DEFAULT_SONNET="$_m" ;;
-    *haiku*)  [ -n "$DEFAULT_HAIKU" ]  || DEFAULT_HAIKU="$_m" ;;
-  esac
-done
-[ -n "$DEFAULT_HAIKU" ] || DEFAULT_HAIKU="$FAST_ENDPOINT"
-
-CLAUDE_SETTINGS="$CLAUDE_SETTINGS" PORT="$PORT" MASTER_KEY="$MASTER_KEY" ENDPOINT="$ENDPOINT" ENDPOINT_FAST="$FAST_ENDPOINT" \
-DEFAULT_OPUS="$DEFAULT_OPUS" DEFAULT_SONNET="$DEFAULT_SONNET" DEFAULT_HAIKU="$DEFAULT_HAIKU" \
-"$VENV/bin/python" - <<'PY'
-import json, os
-path = os.environ["CLAUDE_SETTINGS"]
-try:
-    with open(path) as f:
-        data = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    data = {}
-env = data.get("env") or {}
-env.update({
-    "ANTHROPIC_BASE_URL": f"http://127.0.0.1:{os.environ['PORT']}",
-    "ANTHROPIC_AUTH_TOKEN": os.environ["MASTER_KEY"],
-    "ANTHROPIC_MODEL": os.environ["ENDPOINT"],
-    "ANTHROPIC_SMALL_FAST_MODEL": os.environ["ENDPOINT_FAST"],
-})
-# Point the built-in opus/sonnet/haiku picker presets at the Databricks models
-# so the /model selector shows and routes them as Databricks (not native).
-for _src, _var in (("DEFAULT_OPUS", "ANTHROPIC_DEFAULT_OPUS_MODEL"),
-                   ("DEFAULT_SONNET", "ANTHROPIC_DEFAULT_SONNET_MODEL"),
-                   ("DEFAULT_HAIKU", "ANTHROPIC_DEFAULT_HAIKU_MODEL")):
-    _v = os.environ.get(_src, "")
-    if _v:
-        env[_var] = _v
-data["env"] = env
-with open(path, "w") as f:
-    json.dump(data, f, indent=2)
-    f.write("\n")
-print("  merged env block into", path)
-PY
-ok "Claude Code settings updated"
-
-# ---------------------------------------------------------------------------
-log "6/7 Start the proxy"
-health() { curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$PORT/health/liveliness" 2>/dev/null || echo 000; }
-
-start_launchd() {
-  local plist="$HOME/Library/LaunchAgents/$LAUNCHD_LABEL.plist"
-  mkdir -p "$HOME/Library/LaunchAgents"
-  cat > "$plist" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key><string>$LAUNCHD_LABEL</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/bin/bash</string>
-        <string>$PROXY_DIR/start-proxy.sh</string>
-    </array>
-    <key>WorkingDirectory</key><string>$PROXY_DIR</string>
-    <key>RunAtLoad</key><true/>
-    <key>KeepAlive</key><true/>
-    <key>StandardOutPath</key><string>$PROXY_DIR/proxy.log</string>
-    <key>StandardErrorPath</key><string>$PROXY_DIR/proxy.log</string>
-</dict>
-</plist>
-EOF
-  launchctl unload "$plist" 2>/dev/null || true
-  launchctl load -w "$plist"
-  ok "launchd service '$LAUNCHD_LABEL' loaded (starts on login, restarts on crash)"
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf "%s" "$value"
 }
 
-if [ "$AUTOSTART" = "1" ]; then
-  case "$(uname -s)" in
-    Darwin) start_launchd ;;
-    *)
-      warn "auto-start service is implemented for macOS (launchd) only."
-      warn "starting in the background with nohup for now; see the docs for a systemd unit."
-      nohup "$PROXY_DIR/start-proxy.sh" > "$PROXY_DIR/proxy.log" 2>&1 &
-      ok "proxy started (nohup, PID $!)"
-      ;;
-  esac
-else
-  warn "AUTOSTART=0 — start it yourself: $PROXY_DIR/start-proxy.sh"
+curl_with_bearer() {
+  local token="$1"
+  shift
+  printf 'header = "Authorization: Bearer %s"\n' "$token" |
+    curl --config - "$@"
+}
+
+load_env_file() {
+  local line key value
+  [ -f "$ENV_FILE" ] || return 0
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="$(trim "$line")"
+    case "$line" in ""|\#*) continue ;; esac
+    case "$line" in *=*) ;; *) continue ;; esac
+
+    key="$(trim "${line%%=*}")"
+    value="$(trim "${line#*=}")"
+    case "$value" in
+      \"*\") value="${value#\"}"; value="${value%\"}" ;;
+      \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+
+    case "$key" in
+      DATABRICKS_HOST)
+        [ -n "${DATABRICKS_HOST:-}" ] || DATABRICKS_HOST="$value"
+        ;;
+      DATABRICKS_TOKEN)
+        [ -n "${DATABRICKS_TOKEN:-}" ] || DATABRICKS_TOKEN="$value"
+        ;;
+      DATABRICKS_SERVING_ENDPOINT)
+        [ -n "${DATABRICKS_SERVING_ENDPOINT:-}" ] || DATABRICKS_SERVING_ENDPOINT="$value"
+        ;;
+      DATABRICKS_FAST_ENDPOINT)
+        [ -n "${DATABRICKS_FAST_ENDPOINT:-}" ] || DATABRICKS_FAST_ENDPOINT="$value"
+        ;;
+      DATABRICKS_MODELS)
+        [ -n "${DATABRICKS_MODELS:-}" ] || DATABRICKS_MODELS="$value"
+        ;;
+    esac
+  done < "$ENV_FILE"
+}
+
+native_request() {
+  local model="$1" payload response
+  payload="$(printf '{"model":"%s","max_tokens":16,"messages":[{"role":"user","content":"Reply with exactly: OK"}]}' "$model")"
+  response="$(curl_with_bearer "$DATABRICKS_TOKEN" -sS \
+    -w $'\n%{http_code}' \
+    -X POST "$ANTHROPIC_BASE_URL/v1/messages" \
+    -H "Content-Type: application/json" \
+    -H "anthropic-version: 2023-06-01" \
+    -d "$payload")"
+  NATIVE_HTTP_CODE="${response##*$'\n'}"
+  NATIVE_BODY="${response%$'\n'*}"
+
+  [ "$NATIVE_HTTP_CODE" = "200" ] &&
+    printf "%s" "$NATIVE_BODY" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"message"'
+}
+
+disable_legacy_proxy() {
+  local changed=0 plist unit
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    plist="$HOME/Library/LaunchAgents/$LEGACY_LAUNCHD_LABEL.plist"
+    if [ -f "$plist" ]; then
+      launchctl unload "$plist" >/dev/null 2>&1 || true
+      rm -f "$plist"
+      changed=1
+    else
+      launchctl remove "$LEGACY_LAUNCHD_LABEL" >/dev/null 2>&1 || true
+    fi
+  elif command -v systemctl >/dev/null 2>&1; then
+    unit="$HOME/.config/systemd/user/claude-databricks.service"
+    if [ -f "$unit" ] && grep -Fq "start-proxy.sh" "$unit"; then
+      if systemctl --user disable --now claude-databricks.service >/dev/null 2>&1; then
+        rm -f "$unit"
+        systemctl --user daemon-reload >/dev/null 2>&1 ||
+          warn "legacy unit was removed, but systemd daemon-reload failed"
+        changed=1
+      else
+        warn "could not stop the legacy systemd service; leaving $unit in place"
+      fi
+    fi
+  fi
+
+  if [ "$changed" = "1" ]; then
+    ok "disabled the legacy LiteLLM auto-start service"
+  elif [ -f "$STATE_DIR/config.yaml" ] || [ -d "$STATE_DIR/.venv" ]; then
+    warn "legacy LiteLLM files remain in $STATE_DIR but are no longer used"
+  fi
+}
+
+log "1/6 Load Databricks credentials"
+load_env_file
+: "${DATABRICKS_HOST:?DATABRICKS_HOST is required (in .env or the environment)}"
+: "${DATABRICKS_TOKEN:?DATABRICKS_TOKEN is required (in .env or the environment)}"
+
+ENDPOINT="${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-4-8}"
+FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-databricks-claude-haiku-4-5}"
+MODELS="${DATABRICKS_MODELS:-databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5}"
+MODELS="${MODELS//,/ }"
+ANTHROPIC_BASE_URL="${DATABRICKS_HOST%/}/serving-endpoints/anthropic"
+
+ok "native Anthropic API: $ANTHROPIC_BASE_URL"
+ok "default model: $ENDPOINT   small/fast: $FAST_ENDPOINT"
+
+log "2/6 Preflight"
+command -v curl >/dev/null 2>&1 || die "curl is required"
+command -v claude >/dev/null 2>&1 || die "Claude Code is not installed or not on PATH"
+if [ -n "${ANTHROPIC_AUTH_TOKEN:-}" ] || [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+  die "unset ANTHROPIC_AUTH_TOKEN and ANTHROPIC_API_KEY in this shell before setup; ambient credentials override apiKeyHelper"
 fi
 
-# ---------------------------------------------------------------------------
-log "7/7 Verify"
-if [ "$AUTOSTART" = "1" ]; then
-  # First start of a fresh venv can be slow (litellm import + model registration),
-  # so allow up to 60s before warning.
-  for _ in $(seq 1 60); do [ "$(health)" = "200" ] && break; sleep 1; done
-  [ "$(health)" = "200" ] || { warn "proxy not healthy yet after 60s (cold start can be slow) — check $PROXY_DIR/proxy.log, then retry: curl http://127.0.0.1:$PORT/health/liveliness"; exit 0; }
-  ok "proxy healthy on 127.0.0.1:$PORT"
-  RESP="$(curl -s "http://127.0.0.1:$PORT/v1/messages" \
-    -H "Authorization: Bearer $MASTER_KEY" -H "Content-Type: application/json" \
-    -H "anthropic-version: 2023-06-01" \
-    -d "{\"model\":\"$ENDPOINT\",\"max_tokens\":20,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with: OK\"}]}")"
-  if echo "$RESP" | grep -q '"type": *"message"'; then
-    ok "/v1/messages round-trip OK (native Anthropic response from Databricks)"
-  else
-    warn "/v1/messages test did not return an Anthropic message. Response:"
-    echo "    $RESP"
-  fi
-  if [ "$FAST_ENDPOINT" != "$ENDPOINT" ]; then
-    RESP_FAST="$(curl -s "http://127.0.0.1:$PORT/v1/messages" \
-      -H "Authorization: Bearer $MASTER_KEY" -H "Content-Type: application/json" \
-      -H "anthropic-version: 2023-06-01" \
-      -d "{\"model\":\"$FAST_ENDPOINT\",\"max_tokens\":20,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with: OK\"}]}")"
-    if echo "$RESP_FAST" | grep -q '"type": *"message"'; then
-      ok "small/fast model '$FAST_ENDPOINT' round-trip OK"
-    else
-      warn "small/fast model '$FAST_ENDPOINT' did not return an Anthropic message. Response:"
-      echo "    $RESP_FAST"
-    fi
-  fi
-  # Round-trip each additional selectable model so `/model <name>` is proven.
-  for _m in $MODELS; do
-    [ "$_m" = "$ENDPOINT" ] && continue
-    [ "$_m" = "$FAST_ENDPOINT" ] && continue
-    RESP_M="$(curl -s "http://127.0.0.1:$PORT/v1/messages" \
-      -H "Authorization: Bearer $MASTER_KEY" -H "Content-Type: application/json" \
-      -H "anthropic-version: 2023-06-01" \
-      -d "{\"model\":\"$_m\",\"max_tokens\":20,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with: OK\"}]}")"
-    if echo "$RESP_M" | grep -q '"type": *"message"'; then
-      ok "model '$_m' round-trip OK (selectable via /model)"
-    else
-      warn "model '$_m' did not return an Anthropic message. Response:"
-      echo "    $RESP_M"
-    fi
-  done
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON="$(command -v python3)"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON="$(command -v python)"
+else
+  die "Python is required to merge Claude Code settings safely"
 fi
+ok "Claude Code: $(claude --version 2>/dev/null | head -1)"
+
+log "3/6 Verify native Anthropic API"
+if native_request "$ENDPOINT"; then
+  ok "main model '$ENDPOINT' returned an Anthropic message"
+else
+  printf "%s\n" "$NATIVE_BODY" >&2
+  die "native Anthropic request failed for '$ENDPOINT' (HTTP $NATIVE_HTTP_CODE)"
+fi
+
+if [ "$FAST_ENDPOINT" != "$ENDPOINT" ]; then
+  if native_request "$FAST_ENDPOINT"; then
+    ok "small/fast model '$FAST_ENDPOINT' returned an Anthropic message"
+  else
+    warn "small/fast model '$FAST_ENDPOINT' failed (HTTP $NATIVE_HTTP_CODE); using '$ENDPOINT'"
+    FAST_ENDPOINT="$ENDPOINT"
+  fi
+fi
+
+VALID_MODELS="$ENDPOINT $FAST_ENDPOINT"
+for model in $MODELS; do
+  [ "$model" = "$ENDPOINT" ] && continue
+  [ "$model" = "$FAST_ENDPOINT" ] && continue
+  if native_request "$model"; then
+    ok "selectable model '$model' returned an Anthropic message"
+    VALID_MODELS="$VALID_MODELS $model"
+  else
+    warn "selectable model '$model' failed validation (HTTP $NATIVE_HTTP_CODE); using a validated family fallback"
+  fi
+done
+
+log "4/6 Store credential helper"
+mkdir -p "$STATE_DIR"
+STATE_DIR="$(cd "$STATE_DIR" && pwd)"
+chmod 700 "$STATE_DIR"
+OLD_UMASK="$(umask)"
+umask 077
+cat > "$STATE_DIR/.env" <<EOF
+# Used only by the Claude Code apiKeyHelper. Contains a Databricks credential.
+DATABRICKS_TOKEN=$DATABRICKS_TOKEN
+EOF
+cat > "$STATE_DIR/get-token.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+TOKEN_FILE="$(cd "$(dirname "$0")" && pwd)/.env"
+while IFS= read -r line || [ -n "$line" ]; do
+  case "$line" in
+    DATABRICKS_TOKEN=*)
+      printf "%s" "${line#*=}"
+      exit 0
+      ;;
+  esac
+done < "$TOKEN_FILE"
+echo "DATABRICKS_TOKEN is missing from $TOKEN_FILE" >&2
+exit 1
+EOF
+chmod 600 "$STATE_DIR/.env"
+chmod 700 "$STATE_DIR/get-token.sh"
+umask "$OLD_UMASK"
+ok "credential stored in $STATE_DIR/.env (0600)"
+
+log "5/6 Configure Claude Code"
+mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
+if [ -f "$CLAUDE_SETTINGS" ]; then
+  cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS.bak.$(date +%Y%m%d%H%M%S)"
+  ok "backed up existing Claude settings"
+fi
+
+DEFAULT_OPUS=""; DEFAULT_SONNET=""; DEFAULT_HAIKU=""
+for model in $VALID_MODELS; do
+  case "$model" in
+    *opus*)   [ -n "$DEFAULT_OPUS" ]   || DEFAULT_OPUS="$model" ;;
+    *sonnet*) [ -n "$DEFAULT_SONNET" ] || DEFAULT_SONNET="$model" ;;
+    *haiku*)  [ -n "$DEFAULT_HAIKU" ]  || DEFAULT_HAIKU="$model" ;;
+  esac
+done
+[ -n "$DEFAULT_OPUS" ] || DEFAULT_OPUS="$ENDPOINT"
+[ -n "$DEFAULT_SONNET" ] || DEFAULT_SONNET="$ENDPOINT"
+[ -n "$DEFAULT_HAIKU" ] || DEFAULT_HAIKU="$FAST_ENDPOINT"
+
+CLAUDE_SETTINGS="$CLAUDE_SETTINGS" \
+TOKEN_HELPER="$STATE_DIR/get-token.sh" \
+ANTHROPIC_BASE_URL="$ANTHROPIC_BASE_URL" \
+ENDPOINT="$ENDPOINT" \
+FAST_ENDPOINT="$FAST_ENDPOINT" \
+DEFAULT_OPUS="$DEFAULT_OPUS" \
+DEFAULT_SONNET="$DEFAULT_SONNET" \
+DEFAULT_HAIKU="$DEFAULT_HAIKU" \
+"$PYTHON" - <<'PY'
+import json
+import os
+import shlex
+from pathlib import Path
+
+path = Path(os.environ["CLAUDE_SETTINGS"])
+if path.exists():
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid JSON in {path}: {exc}") from exc
+else:
+    data = {}
+
+if not isinstance(data, dict):
+    raise SystemExit(f"{path} must contain a JSON object")
+
+env = data.get("env")
+if env is None:
+    env = {}
+elif not isinstance(env, dict):
+    raise SystemExit(f"{path}: 'env' must be a JSON object")
+
+env.pop("ANTHROPIC_AUTH_TOKEN", None)
+env.pop("ANTHROPIC_API_KEY", None)
+env.pop("ANTHROPIC_DEFAULT_OPUS_MODEL", None)
+env.pop("ANTHROPIC_DEFAULT_SONNET_MODEL", None)
+env.pop("ANTHROPIC_DEFAULT_HAIKU_MODEL", None)
+env.update(
+    {
+        "ANTHROPIC_BASE_URL": os.environ["ANTHROPIC_BASE_URL"],
+        "ANTHROPIC_MODEL": os.environ["ENDPOINT"],
+        "ANTHROPIC_SMALL_FAST_MODEL": os.environ["FAST_ENDPOINT"],
+        "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+        "CLAUDE_CODE_API_KEY_HELPER_TTL_MS": "900000",
+    }
+)
+
+permissions = data.get("permissions")
+if permissions is None:
+    permissions = {}
+elif not isinstance(permissions, dict):
+    raise SystemExit(f"{path}: 'permissions' must be a JSON object")
+
+deny = permissions.get("deny")
+if deny is None:
+    deny = []
+elif not isinstance(deny, list):
+    raise SystemExit(f"{path}: 'permissions.deny' must be a JSON array")
+if "WebSearch" not in deny:
+    deny.append("WebSearch")
+permissions["deny"] = deny
+
+for source, target in (
+    ("DEFAULT_OPUS", "ANTHROPIC_DEFAULT_OPUS_MODEL"),
+    ("DEFAULT_SONNET", "ANTHROPIC_DEFAULT_SONNET_MODEL"),
+    ("DEFAULT_HAIKU", "ANTHROPIC_DEFAULT_HAIKU_MODEL"),
+):
+    value = os.environ.get(source, "")
+    if value:
+        env[target] = value
+
+data["apiKeyHelper"] = shlex.quote(os.environ["TOKEN_HELPER"])
+data["env"] = env
+data["permissions"] = permissions
+path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+PY
+ok "configured direct Databricks access in $CLAUDE_SETTINGS"
+disable_legacy_proxy
+
+log "6/6 Claude Code end-to-end test"
+VERIFY_DIR="$(mktemp -d)"
+cp "$CLAUDE_SETTINGS" "$VERIFY_DIR/settings.json"
+set +e
+CLAUDE_OUTPUT="$(
+  CLAUDE_CONFIG_DIR="$VERIFY_DIR" \
+  claude --model "$ENDPOINT" \
+    -p "Reply with exactly: DIRECT OK" --output-format json 2>&1
+)"
+CLAUDE_EXIT=$?
+set -e
+rm -rf "$VERIFY_DIR"
+
+if [ "$CLAUDE_EXIT" -ne 0 ] || ! printf "%s" "$CLAUDE_OUTPUT" | "$PYTHON" -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except json.JSONDecodeError:
+    raise SystemExit(1)
+raise SystemExit(0 if not data.get("is_error") and "DIRECT OK" in str(data.get("result", "")).upper() else 1)
+'; then
+  printf "%s\n" "$CLAUDE_OUTPUT" >&2
+  die "Claude Code direct Databricks test failed"
+fi
+ok "Claude Code reached Databricks directly without LiteLLM"
 
 echo
 ok "Done."
-echo "  • Open a new terminal and run:  claude"
-echo "  • Switch model in Claude Code:  /model <name>   (registered: $MODELS)"
-echo "  • Manual start (if service is off):  $PROXY_DIR/start-proxy.sh"
-echo "  • Logs:  $PROXY_DIR/proxy.log"
-echo "  • Docs:  docs/claude-code-databricks.md"
+echo "  - Start Claude Code:  claude"
+echo "  - Switch model:      /model"
+echo "  - Native API:        $ANTHROPIC_BASE_URL"
+echo "  - Credential helper: $STATE_DIR/get-token.sh"
+echo "  - Legacy LiteLLM files, if any, are inert and can be removed after review."

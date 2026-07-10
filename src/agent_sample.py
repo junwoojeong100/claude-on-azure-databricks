@@ -1,13 +1,12 @@
-"""
-Microsoft Agent Framework + Azure Databricks (Claude Opus 4.8) 샘플.
+"""Microsoft Agent Framework + Azure Databricks Claude sample.
 
-Databricks Foundation Model API는 OpenAI Chat Completions와 동일한 페이로드/응답
-포맷을 가지지만, 경로는 `/serving-endpoints/<name>/invocations`만 받습니다
-(Anthropic 모델의 경우 `api_types`: mlflow/v1/chat/completions, anthropic/v1/messages).
+Azure Databricks exposes an OpenAI-compatible route at
+`/serving-endpoints/chat/completions`. The endpoint name is passed as the
+OpenAI `model`, so no URL rewrite or LiteLLM proxy is required.
 
-따라서 OpenAI SDK가 자동으로 붙이는 `/chat/completions`를 httpx event hook으로
-`/invocations`로 리라이트한 뒤, 그 클라이언트를 Agent Framework의
-`OpenAIChatCompletionClient`에 주입합니다.
+Agent Framework adds its agent name to replayed assistant messages. Databricks
+Claude rejects that optional OpenAI field, so a small request hook removes only
+the unsupported message `name` before sending the request.
 """
 
 import asyncio
@@ -25,43 +24,29 @@ from agent_framework.openai import OpenAIChatCompletionClient
 load_dotenv()
 
 
-async def _rewrite_to_invocations(request: httpx.Request) -> None:
-    if request.url.path.endswith("/chat/completions"):
-        new_path = request.url.path[: -len("/chat/completions")] + "/invocations"
-        request.url = request.url.copy_with(path=new_path)
+async def _strip_unsupported_message_names(request: httpx.Request) -> None:
+    if request.method != "POST" or not request.content:
+        return
 
-    if request.method == "POST" and request.content:
-        try:
-            body = json.loads(request.content)
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return
-        if not isinstance(body, dict):
-            return
+    try:
+        body = json.loads(request.content)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return
+    if not isinstance(body, dict):
+        return
 
-        changed = False
+    changed = False
+    messages = body.get("messages")
+    if isinstance(messages, list):
+        for message in messages:
+            if isinstance(message, dict) and "name" in message:
+                message.pop("name", None)
+                changed = True
 
-        # Databricks Foundation Model API `/invocations` rejects the OpenAI
-        # `stream_options` field ('unknown field "stream_options"'). Streaming
-        # responses already carry `usage` on every chunk, so it is safe to drop.
-        if body.pop("stream_options", None) is not None:
-            changed = True
-
-        messages = body.get("messages")
-        if isinstance(messages, list):
-            for msg in messages:
-                if isinstance(msg, dict) and "name" in msg:
-                    # Databricks-hosted Anthropic models reject the optional
-                    # `name` field on assistant/user messages, while Agent
-                    # Framework populates it with the agent name when replaying
-                    # history.
-                    msg.pop("name", None)
-                    changed = True
-
-        if changed:
-            new_body = json.dumps(body, ensure_ascii=False).encode("utf-8")
-            request.stream = httpx.ByteStream(new_body)
-            request._content = new_body
-            request.headers["content-length"] = str(len(new_body))
+    if changed:
+        new_body = json.dumps(body, ensure_ascii=False).encode("utf-8")
+        request.stream = httpx.ByteStream(new_body)
+        request.headers["content-length"] = str(len(new_body))
 
 
 def build_client() -> OpenAIChatCompletionClient:
@@ -69,10 +54,10 @@ def build_client() -> OpenAIChatCompletionClient:
     endpoint_name = os.environ["DATABRICKS_SERVING_ENDPOINT"]
     token = os.environ["DATABRICKS_TOKEN"]
 
-    base_url = f"{workspace}/serving-endpoints/{endpoint_name}/"
+    base_url = f"{workspace}/serving-endpoints"
 
     http_client = httpx.AsyncClient(
-        event_hooks={"request": [_rewrite_to_invocations]},
+        event_hooks={"request": [_strip_unsupported_message_names]},
         timeout=httpx.Timeout(60.0, connect=10.0),
     )
 
@@ -110,8 +95,6 @@ SAMPLE_QUESTIONS = [
 
 _ENABLEMENT_ERROR_HINTS = (
     "rate limit of 0",
-    "temporarily disabled",
-    "PERMISSION_DENIED",
 )
 
 
@@ -121,12 +104,10 @@ def _looks_like_endpoint_disabled_error(exc: BaseException) -> bool:
 
 
 def _print_endpoint_enablement_help(endpoint: str) -> None:
-    # Anthropic Claude on Databricks is a *Databricks-hosted* Foundation Model
-    # (same /invocations API, system.ai catalog, DBU billing and 200k ITPM
-    # limit as Llama). A 403 "rate limit of 0" is therefore not normal
-    # throttling (that returns 429) but an account-level Anthropic serving-
-    # capacity allocation of 0 — not fixable via customer settings. Point the
-    # operator at the real remedy instead of dumping a stack trace.
+    # A 403 "rate limit of 0" is not normal throttling (which returns 429).
+    # It indicates that Anthropic serving capacity is unavailable for the
+    # account or region, so point the operator at the enablement path instead
+    # of dumping a stack trace.
     print(
         "\n" + "=" * 60 + "\n"
         f"[!] '{endpoint}' 호출이 거부되었습니다 (Databricks-set rate limit of 0).\n\n"
@@ -149,16 +130,17 @@ def _print_endpoint_enablement_help(endpoint: str) -> None:
 
 
 async def main() -> None:
+    endpoint_name = os.environ["DATABRICKS_SERVING_ENDPOINT"]
     agent = build_client().as_agent(
         name="DatabricksClaudeAgent",
         instructions=(
-            "You are a helpful assistant powered by Claude Opus 4.8 "
-            "served from Azure Databricks Model Serving. "
+            f"You are a helpful assistant served by {endpoint_name} "
+            "from Azure Databricks Model Serving. "
             "한국어 질문에는 한국어로 답하세요."
         ),
     )
 
-    print("Databricks Claude Opus 4.8 agent — 대화를 시작합니다.")
+    print(f"Databricks agent ({endpoint_name}) — 대화를 시작합니다.")
     print("종료하려면 빈 줄을 입력하거나 Ctrl-D를 누르세요.")
     print(f"먼저 샘플 질문 {len(SAMPLE_QUESTIONS)}개를 자동으로 실행합니다.\n")
 

@@ -6,7 +6,12 @@
 
 ## TL;DR
 
-현재 샘플처럼 **Databricks Foundation Model API**로 Claude를 호출하면 모델 거버넌스/네트워킹/관측이 **Databricks Control Plane**에 묶입니다. **Foundry Models를 직접 쓰면** Foundry의 RBAC, Private Link, Content Safety, Cost Management, 모델 카탈로그가 **Foundry Control Plane** 한 곳에서 관리됩니다.
+현재 샘플처럼 **Databricks Foundation Model API**로 Claude를 호출하면
+모델 거버넌스/네트워킹/관측이 **Databricks Control Plane**에 묶입니다. Databricks는
+OpenAI 호환 통합 API와 provider-native Anthropic Messages API를 모두 제공하므로
+별도 LiteLLM 변환 프록시는 필요하지 않습니다. **Foundry Models를 직접 쓰면** Foundry의
+RBAC, Private Link, Content Safety, Cost Management, 모델 카탈로그가
+**Foundry Control Plane** 한 곳에서 관리됩니다.
 
 ---
 
@@ -93,29 +98,31 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 
 | | 현재 | Foundry 직접 |
 | --- | --- | --- |
-| 클라이언트 | `OpenAIChatCompletionClient` + httpx hook (호환 어댑터) | **`FoundryChatClient` / `FoundryAgent`** (1급 시민) |
+| 클라이언트 | `OpenAIChatCompletionClient` → `/serving-endpoints/chat/completions`; Claude Code → provider-native `/serving-endpoints/anthropic/v1/messages` | **`FoundryChatClient` / `FoundryAgent`** |
 | Hosted tools (code interpreter, file search, MCP) | 직접 구현 | **Foundry Agent Service에서 호스팅 제공** |
 | Thread/Session 관리 | 클라이언트가 직접 | Foundry 서버측 관리 옵션 |
 | Evaluation / Guardrails | 별도 구축 | Foundry Evaluations + Content Safety |
 
-샘플 코드의 `/invocations` 리라이트 같은 우회가 필요 없고, Microsoft가 정식 권장 경로입니다.
+양쪽 모두 공식 SDK 경로를 사용할 수 있습니다. 이 샘플의 작은 httpx 훅은 URL을 변환하는
+어댑터가 아니라, Agent Framework가 대화 이력에 추가하는 선택 필드 `name`만 제거합니다.
 
 ---
 
 ## 10. 관리자 권한 — Foundry와의 대비
 
-> Databricks의 3단계 관리자 권한(Workspace / Account / Metastore)·최초 account admin
+> Databricks의 관리자 역할(Workspace / Account / Metastore)·최초 account admin
 > **부트스트랩**·필요 권한 매트릭스·**자가 진단**은 실습 문서 [README](../README.md#7-관리자-권한-모델) §7로
 > 옮겼습니다. 아래는 Foundry와의 대비 요약만 남깁니다.
 
 | | Databricks | Foundry |
 | --- | --- | --- |
-| 관리자 레이어 수 | **3개** (Workspace / Account / Metastore admin) | **1개** (Azure RBAC만; Owner / Contributor / Cognitive Services 역할 등) |
+| 관리자 레이어 | Account / Workspace 역할 + 선택적 Metastore admin | Azure RBAC + Foundry 프로젝트·데이터 평면 역할 |
 | 부트스트랩 사람 | Entra ID Global Administrator (최초 1회) | Azure 구독 Owner/관리자 (자연 발생) |
-| 데이터 거버넌스 자원 | Unity Catalog Metastore (별도 생성·할당 필요) | Storage/Resource RBAC + Foundry Project 권한 |
-| 시스템 사용량 데이터 접근 | Account admin → Metastore → System schema enable → 권한 부여 (다단계) | Azure Monitor / Cost Management / Diagnostic logs (Reader 권한이면 대부분 조회 가능) |
+| 데이터 거버넌스 자원 | Unity Catalog (2023-11-09 이후 생성 워크스페이스는 자동 활성화, 기존 환경은 metastore 할당 필요) | Storage/Resource RBAC + Foundry Project 권한 |
+| 시스템 사용량 데이터 접근 | Unity Catalog + 기능별 usage tracking/Preview + account-level 권한 | Azure Monitor / Cost Management / Diagnostic logs의 각 RBAC 권한 |
 
-> 즉 Databricks는 **거버넌스 레이어를 한 단계 더 가지며 그만큼 부트스트랩이 까다롭지만**, 일단 세팅되면 Lakehouse 데이터와 모델 사용량을 한 카탈로그에서 통합 분석할 수 있는 게 강점입니다.
+> Databricks는 account/workspace/Unity Catalog 역할을 구분하므로 초기 권한 설계가 더
+> 세분화됩니다. 대신 Lakehouse 데이터와 모델 사용량을 같은 카탈로그에서 통합 분석할 수 있습니다.
 
 ---
 
@@ -130,7 +137,7 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 | 엔드포인트 요청/토큰 대시보드 | **AI Gateway 기본 제공 대시보드** (SQL Warehouse 필요) | Serving → 엔드포인트 상세 → **View metrics** / **Create dashboard** (account admin 권한) | 대시보드 자체는 무료, 단 **SQL Warehouse DBU** 과금 | Warehouse 기동 시간에 비례 |
 | 엔드포인트 인프라 헬스 차트 (QPS/지연/오류) | 없음 — Pay-per-token Foundation Model API 엔드포인트는 상세 페이지에 인프라 메트릭 차트를 표시하지 않음 (Custom / Provisioned Throughput에서만 제공) | — | — | 0 |
 | Inference Tables (요청/응답 + 토큰 Delta 저장) | **Unity Catalog 스토리지 (ADLS Gen2)** | 엔드포인트 → AI Gateway → Inference tables 활성화 | ADLS 저장 용량 + 트랜잭션 | 보통 GB당 $0.02/월 수준, 호출량 비례 |
-| 시스템 테이블 조회 (`system.serving.endpoint_usage` 등) | **SQL Warehouse** (Serverless 권장) 또는 **All-Purpose Cluster** + `system.serving` 스키마 활성화 (account admin) | SQL → Warehouses | DBU/시간 (Serverless SQL XS ≈ $0.7~/시간 + Azure 컴퓨트) | **쿼리할 때만 과금**되지만 자동 stop이 없으면 누적 ↑ |
+| 시스템 테이블 조회 (`system.serving.endpoint_usage` 등) | **SQL Warehouse** (Serverless 권장) 또는 **All-Purpose Cluster** + usage tracking/account-level 접근 | SQL → Warehouses | 선택한 compute의 DBU/클라우드 비용 | **쿼리할 때만 과금**되지만 auto-stop이 없으면 누적 ↑ |
 | 비용 대시보드 (사용자별/엔드포인트별) | SQL Warehouse + Databricks SQL 대시보드 | SQL → Dashboards | 위와 동일 + 스케줄 새로고침 시 재기동 | 새로고침 빈도가 곧 비용 |
 | 외부 모니터링 도구 연계 (Datadog 등) | 외부 도구 라이선스 + Inference Tables 또는 system 테이블에 ETL | 외부 SaaS | 외부 도구 비용 + 데이터 전송 | 도구별 상이 |
 | 알림/이상 탐지 | Databricks **Lakehouse Monitoring** 또는 Job + Notebook 스케줄 | Quality → Monitors | DBU (Serverless Job) | 모니터당 수십 분/일 → 월 단위 적은 비용 |
@@ -141,14 +148,14 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 
 | 용도 | 추가로 필요한 리소스 | 활성화 위치 | 비용 모델 | 실무 체감 비용 |
 | --- | --- | --- | --- | --- |
-| 기본 메트릭 (요청 수, 토큰, 지연시간) | 없음 — Azure Monitor가 플랫폼 메트릭으로 자동 수집 | Foundry/Cognitive Services 리소스 → Metrics | **무료** (90일 보관, 1분 단위) | 0 |
-| 상세 로그 (요청/응답, 콘텐츠 안전, 사용량) | **Diagnostic Settings** + 다음 중 1개 이상의 sink<br>– **Log Analytics Workspace**<br>– Storage Account (장기 보관)<br>– Event Hubs (실시간 스트리밍) | 리소스 → Diagnostic settings | 수집/보관량 기준<br>– Log Analytics: ≈ $2.76/GB ingest + $0.12/GB·월 보관<br>– Storage (cool): GB당 ≈ $0.01/월 | 호출량·페이로드 크기 비례 |
+| 기본 메트릭 (요청 수, 토큰, 지연시간) | 없음 — Azure Monitor가 플랫폼 메트릭으로 자동 수집 | Foundry/Cognitive Services 리소스 → Metrics | 기본 플랫폼 메트릭 정책 적용 | 별도 로그 수집보다 낮음 |
+| 상세 로그 (요청/응답, 콘텐츠 안전, 사용량) | **Diagnostic Settings** + 다음 중 1개 이상의 sink<br>– **Log Analytics Workspace**<br>– Storage Account (장기 보관)<br>– Event Hubs (실시간 스트리밍) | 리소스 → Diagnostic settings | 수집량·보존 기간·리전별 가격 | 호출량·페이로드 크기 비례 |
 | KQL 쿼리/대시보드 | Log Analytics Workspace (위와 동일) + 선택적 **Azure Workbook**(무료) / **Grafana**(별도) | Azure Portal → Logs / Workbooks | 쿼리 자체는 무료, Premium 보존만 별도 | Workbook은 0, Managed Grafana는 인스턴스 시간 과금 |
-| App/Agent 분산 추적 (OpenTelemetry) | **Application Insights** (Log Analytics 기반) | 코드에 OTEL exporter 설정 | 텔레메트리 GB당 ≈ $2.30 (Basic) / $2.76 (Classic) | 추적 샘플링으로 조절 |
-| 콘텐츠 안전 (모더레이션) 로그 | Foundry **Content Safety**가 기본 내장 — 호출당 별도 트랜잭션 과금 가능 | Foundry → Safety + Diagnostic logs | $1 정도/1K 텍스트 트랜잭션 (티어 상이) | 사용량 비례 |
-| 알림 | **Azure Monitor Alerts** (메트릭/로그 알림) + **Action Group** | Monitor → Alerts | 메트릭 알림 ≈ $0.10/규칙·월, 로그 알림 ≈ $1.50/규칙·월, SMS/음성 별도 | 규칙 수 비례 |
+| App/Agent 분산 추적 (OpenTelemetry) | **Application Insights** (Log Analytics 기반) | 코드에 OTEL exporter 설정 | 텔레메트리 수집·보존량 기준 | 추적 샘플링으로 조절 |
+| 콘텐츠 안전 (모더레이션) 로그 | 모델/배포에서 Content Safety를 구성하고 Diagnostic logs로 수집 | Foundry → Safety + Diagnostic logs | 선택한 안전 기능과 사용량 기준 | 사용량 비례 |
+| 알림 | **Azure Monitor Alerts** (메트릭/로그 알림) + **Action Group** | Monitor → Alerts | 규칙 유형·수와 알림 채널별 가격 | 규칙 수 비례 |
 | 비용 분석 | **Azure Cost Management** (기본 무료), **Budgets**, Cost alerts | Cost Management + Billing | 무료 | 0 |
-| (옵션) 단일 SIEM | **Microsoft Sentinel** = Log Analytics 위 + Sentinel 분석 비용 | Sentinel 활성화 | 분석 데이터 GB당 ≈ $4.30 (Pay-as-you-go) | 보안 통합 시만 고려 |
+| (옵션) 단일 SIEM | **Microsoft Sentinel** = Log Analytics 위 + Sentinel 분석 비용 | Sentinel 활성화 | 선택한 약정/수집량 기준 | 보안 통합 시만 고려 |
 
 > **저비용 출발점**: Azure Portal의 리소스 **Metrics** 블레이드 + Cost Management + Action Group (이메일) 만으로 시작 → 페이로드 감사가 필요해지면 Log Analytics를 붙이고 **샘플링/보존기간**으로 비용 통제. Application Insights는 OTEL 트레이스가 실제로 필요한 시점에 추가.
 
@@ -193,4 +200,7 @@ Foundry는 Azure Monitor / Application Insights와 **표준 통합**, Databricks
 
 ## 마이그레이션 관점 한 줄
 
-> **Databricks → Foundry로 옮기는 비용은 코드 한 줄(`OpenAIChatCompletionClient` 교체) 수준**이지만, 옮겨가는 즉시 **거버넌스·관측·청구가 Azure Foundry Control Plane으로 통합**됩니다. 반대로 Databricks에 남기면 **데이터 플랫폼과 모델 플랫폼이 한 경계 안**에 머무는 게 가장 큰 이점입니다.
+> **Databricks → Foundry 전환은 단순한 클라이언트 교체만으로 끝나지 않습니다.**
+> 모델 ID와 인증, endpoint URL, 권한, 네트워크, 관측·비용 대시보드를 함께 옮겨야 합니다.
+> 전환 후에는 거버넌스·관측·청구가 Foundry Control Plane으로 통합되고, Databricks에
+> 남기면 데이터 플랫폼과 모델 플랫폼을 같은 경계에서 운영할 수 있습니다.

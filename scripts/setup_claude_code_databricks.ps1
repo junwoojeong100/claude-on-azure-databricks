@@ -1,481 +1,437 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Bridge the Claude Code CLI to an Azure Databricks-hosted Claude model (Windows).
+    Configure Claude Code to call Azure Databricks' native Anthropic API.
 
 .DESCRIPTION
-    Claude Code speaks only the Anthropic Messages API (POST /v1/messages,
-    Anthropic-shaped responses). Databricks Model Serving speaks the OpenAI
-    Chat Completions schema at /serving-endpoints/<name>/invocations. This
-    script installs a small local LiteLLM proxy that translates between the two,
-    points Claude Code at it via %USERPROFILE%\.claude\settings.json, and (on
-    Windows) registers a logon Scheduled Task so the proxy starts automatically.
+    Azure Databricks exposes an Anthropic-compatible endpoint at:
 
-        Claude Code --(/v1/messages)--> LiteLLM (127.0.0.1:PORT) --> Databricks
+        https://<workspace>/serving-endpoints/anthropic/v1/messages
 
-    It is idempotent. Credentials are read from the repo .env or the environment
-    and written only to <ProxyDir>\.env (restricted to the current user).
+    Claude Code can use this endpoint directly. No LiteLLM proxy, Python
+    environment, local port, or auto-start service is required.
+
+    This script verifies the endpoint, stores the Databricks token in a
+    user-restricted file, configures Claude Code with an apiKeyHelper, disables
+    the legacy LiteLLM Scheduled Task if present, and runs an end-to-end test.
 
 .EXAMPLE
     scripts\setup_claude_code_databricks.ps1
 
 .EXAMPLE
-    $env:DATABRICKS_HOST="https://adb-xxx.azuredatabricks.net"
-    $env:DATABRICKS_TOKEN="dapi..."
-    $env:DATABRICKS_SERVING_ENDPOINT="databricks-claude-opus-4-8"
+    $env:DATABRICKS_HOST = 'https://adb-xxx.azuredatabricks.net'
+    $env:DATABRICKS_TOKEN = 'dapi...'
+    $env:DATABRICKS_SERVING_ENDPOINT = 'databricks-claude-opus-4-8'
     scripts\setup_claude_code_databricks.ps1
-
-.NOTES
-    The macOS/Linux equivalent is scripts/setup_claude_code_databricks.sh.
 #>
 [CmdletBinding()]
 param(
-    [string]$ProxyDir = (Join-Path $env:USERPROFILE '.claude-databricks'),
-    [int]$Port = 4000,
-    [string]$MasterKey = 'sk-databricks-local',
-    [bool]$AutoStart = $true,
-    [string]$TaskName = 'ClaudeDatabricksProxy',
-    [string]$ClaudeSettings = (Join-Path $env:USERPROFILE '.claude\settings.json'),
+    [Alias('ProxyDir')]
+    [string]$StateDir = (Join-Path $HOME '.claude-databricks'),
+    [string]$ClaudeSettings = (Join-Path (Join-Path $HOME '.claude') 'settings.json'),
     [string]$Endpoint,
     [string]$FastEndpoint,
     [string]$Models,
     [string]$EnvFile,
-    [switch]$Force
+    [string]$LegacyTaskName = 'ClaudeDatabricksProxy'
 )
 
 $ErrorActionPreference = 'Stop'
 
-function Write-Step { param([string]$m) Write-Host "==> $m" -ForegroundColor Blue }
-function Write-Ok   { param([string]$m) Write-Host " ok  $m" -ForegroundColor Green }
-function Write-Note { param([string]$m) Write-Host "[!] $m" -ForegroundColor Yellow }
-function Die        { param([string]$m) Write-Host "[x] $m" -ForegroundColor Red; exit 1 }
+function Write-Step { param([string]$Message) Write-Host "==> $Message" -ForegroundColor Blue }
+function Write-Ok   { param([string]$Message) Write-Host " ok  $Message" -ForegroundColor Green }
+function Write-Note { param([string]$Message) Write-Host "[!] $Message" -ForegroundColor Yellow }
+function Stop-WithError {
+    param([string]$Message)
+    Write-Host "[x] $Message" -ForegroundColor Red
+    exit 1
+}
 
-# PowerShell 5.1 only exists on Windows, so a missing $IsWindows means Windows.
+function Set-JsonProperty {
+    param(
+        [Parameter(Mandatory)] [object]$Object,
+        [Parameter(Mandatory)] [string]$Name,
+        [Parameter(Mandatory)] $Value
+    )
+    if ($Object.PSObject.Properties[$Name]) {
+        $Object.$Name = $Value
+    }
+    else {
+        $Object | Add-Member -MemberType NoteProperty -Name $Name -Value $Value
+    }
+}
+
+function Remove-JsonProperty {
+    param(
+        [Parameter(Mandatory)] [object]$Object,
+        [Parameter(Mandatory)] [string]$Name
+    )
+    if ($Object.PSObject.Properties[$Name]) {
+        $Object.PSObject.Properties.Remove($Name)
+    }
+}
+
+function Test-NativeModel {
+    param([Parameter(Mandatory)] [string]$Model)
+
+    $body = @{
+        model      = $Model
+        max_tokens = 16
+        messages   = @(@{ role = 'user'; content = 'Reply with exactly: OK' })
+    } | ConvertTo-Json -Depth 8
+
+    try {
+        $response = Invoke-RestMethod "$script:AnthropicBaseUrl/v1/messages" -Method Post `
+            -Headers @{
+                Authorization       = "Bearer $script:DbxToken"
+                'anthropic-version' = '2023-06-01'
+            } `
+            -ContentType 'application/json' `
+            -Body $body
+        $script:LastNativeError = $null
+        return ($response.type -eq 'message')
+    }
+    catch {
+        $script:LastNativeError = $_.ErrorDetails.Message
+        if (-not $script:LastNativeError) {
+            $script:LastNativeError = $_.Exception.Message
+        }
+        return $false
+    }
+}
+
 $OnWindows = $true
-if (Get-Variable -Name IsWindows -ErrorAction SilentlyContinue) { $OnWindows = [bool]$IsWindows }
+if (Get-Variable -Name IsWindows -ErrorAction SilentlyContinue) {
+    $OnWindows = [bool]$IsWindows
+}
 
 $Root = if ($PSScriptRoot) { Split-Path -Parent $PSScriptRoot } else { (Get-Location).Path }
-if (-not $EnvFile) { $EnvFile = Join-Path $Root '.env' }
-if (-not $Endpoint) {
-    $Endpoint = if ($env:DATABRICKS_SERVING_ENDPOINT) { $env:DATABRICKS_SERVING_ENDPOINT } else { 'databricks-claude-opus-4-8' }
-}
-# Small/fast "classifier" model Claude Code uses for background tasks
-# (ANTHROPIC_SMALL_FAST_MODEL); a lighter/cheaper endpoint than the main one.
-if (-not $FastEndpoint) {
-    $FastEndpoint = if ($env:DATABRICKS_FAST_ENDPOINT) { $env:DATABRICKS_FAST_ENDPOINT } else { 'databricks-claude-haiku-4-5' }
-}
-# Selectable main models registered in the proxy so you can switch inside
-# Claude Code with `/model <name>`. Space- or comma-separated; override with
-# DATABRICKS_MODELS. The default main model is $Endpoint (ANTHROPIC_MODEL).
-if (-not $Models) {
-    $Models = if ($env:DATABRICKS_MODELS) { $env:DATABRICKS_MODELS } else { 'databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5' }
+if (-not $EnvFile) {
+    $EnvFile = Join-Path $Root '.env'
 }
 
-# ---------------------------------------------------------------------------
-Write-Step '1/7 Load Databricks credentials'
+Write-Step '1/6 Load Databricks credentials'
 $DbxHost = $env:DATABRICKS_HOST
 $DbxToken = $env:DATABRICKS_TOKEN
+
 if (Test-Path $EnvFile) {
     foreach ($line in Get-Content $EnvFile) {
         if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') {
-            $k = $Matches[1]; $v = $Matches[2].Trim().Trim('"').Trim("'")
-            switch ($k) {
-                'DATABRICKS_HOST'  { if (-not $DbxHost)  { $DbxHost = $v } }
-                'DATABRICKS_TOKEN' { if (-not $DbxToken) { $DbxToken = $v } }
-                'DATABRICKS_SERVING_ENDPOINT' { if (-not $env:DATABRICKS_SERVING_ENDPOINT) { $Endpoint = $v } }
-                'DATABRICKS_FAST_ENDPOINT' { if (-not $env:DATABRICKS_FAST_ENDPOINT) { $FastEndpoint = $v } }
-                'DATABRICKS_MODELS' { if (-not $env:DATABRICKS_MODELS) { $Models = $v } }
+            $key = $Matches[1]
+            $value = $Matches[2].Trim().Trim('"').Trim("'")
+            switch ($key) {
+                'DATABRICKS_HOST' {
+                    if (-not $DbxHost) { $DbxHost = $value }
+                }
+                'DATABRICKS_TOKEN' {
+                    if (-not $DbxToken) { $DbxToken = $value }
+                }
+                'DATABRICKS_SERVING_ENDPOINT' {
+                    if (-not $Endpoint -and -not $env:DATABRICKS_SERVING_ENDPOINT) {
+                        $Endpoint = $value
+                    }
+                }
+                'DATABRICKS_FAST_ENDPOINT' {
+                    if (-not $FastEndpoint -and -not $env:DATABRICKS_FAST_ENDPOINT) {
+                        $FastEndpoint = $value
+                    }
+                }
+                'DATABRICKS_MODELS' {
+                    if (-not $Models -and -not $env:DATABRICKS_MODELS) {
+                        $Models = $value
+                    }
+                }
             }
         }
     }
     Write-Ok "loaded $EnvFile"
 }
 else {
-    Write-Note "no $EnvFile - expecting DATABRICKS_HOST/DATABRICKS_TOKEN in the environment"
-}
-if (-not $DbxHost)  { Die 'DATABRICKS_HOST is required (in .env or the environment)' }
-if (-not $DbxToken) { Die 'DATABRICKS_TOKEN is required (in .env or the environment)' }
-$ApiBase = $DbxHost.TrimEnd('/') + '/serving-endpoints'
-Write-Ok "endpoint: $Endpoint   fast: $FastEndpoint   base: $ApiBase"
-Write-Ok "selectable models (/model): $Models"
-
-# ---------------------------------------------------------------------------
-Write-Step '2/7 Preflight'
-if (Get-Command claude -ErrorAction SilentlyContinue) {
-    $cv = (& claude --version 2>$null | Select-Object -First 1)
-    Write-Ok "claude CLI: $cv"
-}
-else {
-    Write-Note 'claude CLI not on PATH - install it, then re-run (setup still continues)'
+    Write-Note "no $EnvFile; using environment variables"
 }
 
-$UseUv = [bool](Get-Command uv -ErrorAction SilentlyContinue)
-$PyExe = $null
-if (-not $UseUv) {
-    foreach ($cand in @('python', 'python3', 'py')) {
-        $c = Get-Command $cand -ErrorAction SilentlyContinue
-        if ($c) { $PyExe = $c.Source; break }
-    }
-    if (-not $PyExe) { Die "need either 'uv' or 'python' to create the proxy environment" }
-}
-if ($UseUv) { Write-Ok 'using uv for the Python environment' } else { Write-Ok "using python venv + pip ($PyExe)" }
+if (-not $DbxHost) { Stop-WithError 'DATABRICKS_HOST is required' }
+if (-not $DbxToken) { Stop-WithError 'DATABRICKS_TOKEN is required' }
 
-# ---------------------------------------------------------------------------
-Write-Step "3/7 Proxy environment at $ProxyDir"
-New-Item -ItemType Directory -Force -Path $ProxyDir | Out-Null
-$Venv = Join-Path $ProxyDir '.venv'
-$BinDir = if ($OnWindows) { Join-Path $Venv 'Scripts' } else { Join-Path $Venv 'bin' }
-$VenvPy = Join-Path $BinDir ($(if ($OnWindows) { 'python.exe' } else { 'python' }))
-$VenvLitellm = Join-Path $BinDir ($(if ($OnWindows) { 'litellm.exe' } else { 'litellm' }))
-
-if ((Test-Path $VenvLitellm) -and (-not $Force)) {
-    Write-Ok 'litellm already installed (-Force to reinstall)'
-}
-else {
-    if ($UseUv) {
-        if (-not (Test-Path $Venv)) { & uv venv $Venv --python 3.12 }
-        & uv pip install --python $VenvPy --quiet 'litellm[proxy]'
+if (-not $Endpoint) {
+    $Endpoint = if ($env:DATABRICKS_SERVING_ENDPOINT) {
+        $env:DATABRICKS_SERVING_ENDPOINT
     }
     else {
-        if (-not (Test-Path $Venv)) { & $PyExe -m venv $Venv }
-        & $VenvPy -m pip install --quiet --upgrade pip
-        & $VenvPy -m pip install --quiet 'litellm[proxy]'
+        'databricks-claude-opus-4-8'
     }
-    if ($LASTEXITCODE -ne 0) { Die 'litellm install failed' }
-    Write-Ok 'installed litellm[proxy]'
+}
+if (-not $FastEndpoint) {
+    $FastEndpoint = if ($env:DATABRICKS_FAST_ENDPOINT) {
+        $env:DATABRICKS_FAST_ENDPOINT
+    }
+    else {
+        'databricks-claude-haiku-4-5'
+    }
+}
+if (-not $Models) {
+    $Models = if ($env:DATABRICKS_MODELS) {
+        $env:DATABRICKS_MODELS
+    }
+    else {
+        'databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5'
+    }
 }
 
-# ---------------------------------------------------------------------------
-Write-Step '4/7 Write proxy config, credentials, and start script'
+$AnthropicBaseUrl = $DbxHost.TrimEnd('/') + '/serving-endpoints/anthropic'
+Write-Ok "native Anthropic API: $AnthropicBaseUrl"
+Write-Ok "default model: $Endpoint   small/fast: $FastEndpoint"
 
-# Register every selectable main model (plus the small/fast model) as its own
-# entry so Claude Code's /model <name> resolves each to the right Databricks
-# endpoint. De-duplicate, default first, fast last; the catch-all "*" then
-# routes any unrecognized name to the default main endpoint.
-$modelTokens = (@($Endpoint) + ($Models -split '[,\s]+') + @($FastEndpoint)) |
-    Where-Object { $_ -and $_.Trim() } | ForEach-Object { $_.Trim() }
-$reg = @()
-foreach ($m in $modelTokens) { if ($reg -notcontains $m) { $reg += $m } }
+Write-Step '2/6 Preflight'
+if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+    Stop-WithError 'Claude Code is not installed or not on PATH'
+}
+if ($env:ANTHROPIC_AUTH_TOKEN -or $env:ANTHROPIC_API_KEY) {
+    Stop-WithError 'clear ANTHROPIC_AUTH_TOKEN and ANTHROPIC_API_KEY in this shell before setup; ambient credentials override apiKeyHelper'
+}
+$ClaudeVersion = (& claude --version 2>$null | Select-Object -First 1)
+Write-Ok "Claude Code: $ClaudeVersion"
 
-$entryTemplate = @'
-  - model_name: __M__
-    litellm_params:
-      model: databricks/__M__
-      api_key: os.environ/DATABRICKS_API_KEY
-      api_base: os.environ/DATABRICKS_API_BASE
+Write-Step '3/6 Verify native Anthropic API'
+if (-not (Test-NativeModel -Model $Endpoint)) {
+    if ($LastNativeError) { Write-Host $LastNativeError -ForegroundColor Red }
+    Stop-WithError "native Anthropic request failed for '$Endpoint'"
+}
+Write-Ok "main model '$Endpoint' returned an Anthropic message"
+
+if ($FastEndpoint -ne $Endpoint) {
+    if (Test-NativeModel -Model $FastEndpoint) {
+        Write-Ok "small/fast model '$FastEndpoint' returned an Anthropic message"
+    }
+    else {
+        Write-Note "small/fast model '$FastEndpoint' failed; using '$Endpoint'"
+        $FastEndpoint = $Endpoint
+    }
+}
+
+$ValidatedModels = @($Endpoint, $FastEndpoint)
+foreach ($model in ($Models -split '[,\s]+' | Where-Object { $_ -and $_.Trim() })) {
+    $model = $model.Trim()
+    if ($model -eq $Endpoint -or $model -eq $FastEndpoint) {
+        continue
+    }
+    if (Test-NativeModel -Model $model) {
+        Write-Ok "selectable model '$model' returned an Anthropic message"
+        $ValidatedModels += $model
+    }
+    else {
+        Write-Note "selectable model '$model' failed validation; using a validated family fallback"
+    }
+}
+$ValidatedModels = @($ValidatedModels | Select-Object -Unique)
+
+Write-Step '4/6 Store credential helper'
+New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
+$StateDir = (Resolve-Path $StateDir).Path
+$TokenFile = Join-Path $StateDir '.env'
+$TokenHelper = Join-Path $StateDir 'get-token.ps1'
+
+Set-Content -Path $TokenFile -Encoding ascii -Value @(
+    '# Used only by the Claude Code apiKeyHelper. Contains a Databricks credential.'
+    "DATABRICKS_TOKEN=$DbxToken"
+)
+
+$TokenHelperContent = @'
+$ErrorActionPreference = 'Stop'
+$tokenFile = Join-Path $PSScriptRoot '.env'
+foreach ($line in Get-Content $tokenFile) {
+    if ($line -match '^DATABRICKS_TOKEN=(.*)$') {
+        [Console]::Out.Write($Matches[1])
+        exit 0
+    }
+}
+Write-Error "DATABRICKS_TOKEN is missing from $tokenFile"
+exit 1
 '@
-$ModelEntries = (($reg | ForEach-Object { $entryTemplate.Replace('__M__', $_) }) -join "`n")
-$regList = $reg -join ' '
+Set-Content -Path $TokenHelper -Encoding utf8 -Value $TokenHelperContent
 
-$Config = @"
-# LiteLLM proxy: exposes an Anthropic /v1/messages endpoint that Claude Code
-# talks to, and translates each request to Azure Databricks serving endpoints.
-# Registered models (switch inside Claude Code with /model <name>):
-#   $regList
-# Default main (ANTHROPIC_MODEL): $Endpoint
-# Small/fast classifier (ANTHROPIC_SMALL_FAST_MODEL): $FastEndpoint
-# Credentials are injected from the sibling .env at runtime (DATABRICKS_API_KEY /
-# DATABRICKS_API_BASE); no secrets live here.
-model_list:
-$ModelEntries
-  # Catch-all: any unrecognized model name is routed to the default main endpoint.
-  - model_name: "*"
-    litellm_params:
-      model: databricks/$Endpoint
-      api_key: os.environ/DATABRICKS_API_KEY
-      api_base: os.environ/DATABRICKS_API_BASE
-
-litellm_settings:
-  drop_params: true
-  # Strip Anthropic 'thinking' content Claude Code replays (Databricks rejects
-  # it: "messages.N.thinking_blocks: Extra inputs are not permitted").
-  callbacks: custom_handlers.proxy_handler_instance
-
-general_settings:
-  master_key: os.environ/LITELLM_MASTER_KEY
-"@
-Set-Content -Path (Join-Path $ProxyDir 'config.yaml') -Value $Config -Encoding utf8
-Write-Ok "wrote $ProxyDir\config.yaml"
-
-$CustomHandlers = @'
-"""LiteLLM proxy hook: make Claude Code requests compatible with Databricks.
-
-Two Anthropic-isms that the Databricks serving endpoint rejects are fixed here,
-in a single pre-call hook, before the upstream `/invocations` request:
-
-1. `thinking_blocks` / `reasoning_content` - Claude Code (extended thinking)
-   replays prior assistant 'thinking' blocks in the conversation history.
-   Databricks rejects them with
-   `messages.N.thinking_blocks: Extra inputs are not permitted`.
-
-2. `stop_sequences` - Claude Code (including its small/fast "classifier"
-   background calls) sends the Anthropic `stop_sequences` field. Databricks
-   rejects it with `Cannot specify parameter stop_sequences, use stop instead.`
-   so we translate it to the OpenAI-style `stop`.
-"""
-
-from litellm.integrations.custom_logger import CustomLogger
-
-_THINKING_TYPES = {"thinking", "redacted_thinking"}
-
-
-class DatabricksCompatHook(CustomLogger):
-    @staticmethod
-    def _fix_stop(container):
-        """Translate Anthropic `stop_sequences` to the OpenAI-style `stop`.
-
-        Databricks also rejects whitespace-only stop sequences, so drop those;
-        if none remain, omit `stop` entirely rather than send an invalid value.
-        """
-        if not isinstance(container, dict) or "stop_sequences" not in container:
-            return
-        seq = container.pop("stop_sequences")
-        if isinstance(seq, str):
-            seq = [seq]
-        if isinstance(seq, list):
-            seq = [s for s in seq if isinstance(s, str) and s.strip()]
-        else:
-            seq = None
-        if seq and not container.get("stop"):
-            container["stop"] = seq
-
-    def _clean(self, data):
-        if not isinstance(data, dict):
-            return data
-        # stop_sequences can sit at the top level and/or under optional_params.
-        self._fix_stop(data)
-        self._fix_stop(data.get("optional_params"))
-        messages = data.get("messages")
-        if isinstance(messages, list):
-            for msg in messages:
-                if not isinstance(msg, dict):
-                    continue
-                msg.pop("thinking_blocks", None)
-                msg.pop("reasoning_content", None)
-                content = msg.get("content")
-                if isinstance(content, list):
-                    filtered = [
-                        block
-                        for block in content
-                        if not (isinstance(block, dict) and block.get("type") in _THINKING_TYPES)
-                    ]
-                    # Never leave an assistant turn with empty content.
-                    msg["content"] = filtered if filtered else ""
-        return data
-
-    async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
-        return self._clean(data)
-
-
-proxy_handler_instance = DatabricksCompatHook()
-'@
-Set-Content -Path (Join-Path $ProxyDir 'custom_handlers.py') -Value $CustomHandlers -Encoding utf8
-Write-Ok "wrote $ProxyDir\custom_handlers.py"
-
-$EnvContent = @"
-# Auto-generated by setup_claude_code_databricks.ps1 - contains a secret.
-DATABRICKS_API_KEY=$DbxToken
-DATABRICKS_API_BASE=$ApiBase
-LITELLM_MASTER_KEY=$MasterKey
-"@
-$EnvPath = Join-Path $ProxyDir '.env'
-Set-Content -Path $EnvPath -Value $EnvContent -Encoding ascii
 if ($OnWindows) {
-    # Restrict to the current user (equivalent of chmod 600).
-    & icacls $EnvPath /inheritance:r /grant:r "${env:USERNAME}:(R,W)" | Out-Null
+    & icacls $TokenFile /inheritance:r /grant:r "${env:USERNAME}:(M)" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Stop-WithError "failed to restrict ACLs on $TokenFile"
+    }
+    & icacls $TokenHelper /inheritance:r /grant:r "${env:USERNAME}:(M)" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Stop-WithError "failed to restrict ACLs on $TokenHelper"
+    }
+    $HelperShell = 'powershell.exe'
 }
 else {
-    & chmod 600 $EnvPath
-}
-Write-Ok "wrote $ProxyDir\.env (restricted to current user)"
-
-$LogPath = Join-Path $ProxyDir 'proxy.log'
-$StartTemplate = @'
-# Auto-generated. Loads credentials from .env and starts the LiteLLM proxy.
-$ErrorActionPreference = 'Stop'
-Get-Content '__ENV__' | ForEach-Object {
-    if ($_ -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') {
-        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2])
+    & chmod 600 $TokenFile
+    if ($LASTEXITCODE -ne 0) {
+        Stop-WithError "failed to set mode 0600 on $TokenFile"
     }
+    & chmod 700 $TokenHelper
+    if ($LASTEXITCODE -ne 0) {
+        Stop-WithError "failed to set mode 0700 on $TokenHelper"
+    }
+    $HelperShell = 'pwsh'
 }
-& '__LITELLM__' --config '__CONFIG__' --host 127.0.0.1 --port __PORT__ *>> '__LOG__'
-'@
-$StartScript = Join-Path $ProxyDir 'start-proxy.ps1'
-$StartTemplate = $StartTemplate.
-    Replace('__ENV__', $EnvPath).
-    Replace('__LITELLM__', $VenvLitellm).
-    Replace('__CONFIG__', (Join-Path $ProxyDir 'config.yaml')).
-    Replace('__LOG__', $LogPath).
-    Replace('__PORT__', "$Port")
-Set-Content -Path $StartScript -Value $StartTemplate -Encoding utf8
-Write-Ok "wrote $StartScript"
+$ApiKeyHelper = "$HelperShell -NoProfile -ExecutionPolicy Bypass -File `"$TokenHelper`""
+Write-Ok "credential stored in $TokenFile"
 
-# ---------------------------------------------------------------------------
-Write-Step "5/7 Point Claude Code at the proxy ($ClaudeSettings)"
+Write-Step '5/6 Configure Claude Code'
 $SettingsDir = Split-Path -Parent $ClaudeSettings
-if ($SettingsDir) { New-Item -ItemType Directory -Force -Path $SettingsDir | Out-Null }
+if ($SettingsDir) {
+    New-Item -ItemType Directory -Force -Path $SettingsDir | Out-Null
+}
+
 if (Test-Path $ClaudeSettings) {
     Copy-Item $ClaudeSettings "$ClaudeSettings.bak.$(Get-Date -Format 'yyyyMMddHHmmss')"
-    Write-Ok 'backed up existing settings'
-}
-$env:CC_SETTINGS = $ClaudeSettings
-$env:CC_PORT = "$Port"
-$env:CC_KEY = $MasterKey
-$env:CC_ENDPOINT = $Endpoint
-$env:CC_ENDPOINT_FAST = $FastEndpoint
-# Map the built-in opus/sonnet/haiku picker presets to the matching Databricks
-# models, so the /model selector shows and routes them as Databricks models.
-$DefaultOpus = ''; $DefaultSonnet = ''; $DefaultHaiku = ''
-foreach ($m in (($Models -split '[,\s]+') + @($Endpoint, $FastEndpoint) | Where-Object { $_ -and $_.Trim() })) {
-    $m = $m.Trim()
-    if (-not $DefaultOpus   -and $m -like '*opus*')   { $DefaultOpus = $m }
-    if (-not $DefaultSonnet -and $m -like '*sonnet*') { $DefaultSonnet = $m }
-    if (-not $DefaultHaiku  -and $m -like '*haiku*')  { $DefaultHaiku = $m }
-}
-if (-not $DefaultHaiku) { $DefaultHaiku = $FastEndpoint }
-$env:CC_DEFAULT_OPUS = $DefaultOpus
-$env:CC_DEFAULT_SONNET = $DefaultSonnet
-$env:CC_DEFAULT_HAIKU = $DefaultHaiku
-$PyMerge = @'
-import json, os
-path = os.environ["CC_SETTINGS"]
-try:
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    data = {}
-env = data.get("env") or {}
-env.update({
-    "ANTHROPIC_BASE_URL": "http://127.0.0.1:" + os.environ["CC_PORT"],
-    "ANTHROPIC_AUTH_TOKEN": os.environ["CC_KEY"],
-    "ANTHROPIC_MODEL": os.environ["CC_ENDPOINT"],
-    "ANTHROPIC_SMALL_FAST_MODEL": os.environ["CC_ENDPOINT_FAST"],
-})
-for _src, _var in (("CC_DEFAULT_OPUS", "ANTHROPIC_DEFAULT_OPUS_MODEL"),
-                   ("CC_DEFAULT_SONNET", "ANTHROPIC_DEFAULT_SONNET_MODEL"),
-                   ("CC_DEFAULT_HAIKU", "ANTHROPIC_DEFAULT_HAIKU_MODEL")):
-    _v = os.environ.get(_src, "")
-    if _v:
-        env[_var] = _v
-data["env"] = env
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
-    f.write("\n")
-print("  merged env block into", path)
-'@
-$TmpPy = Join-Path ([System.IO.Path]::GetTempPath()) "cc_merge_$PID.py"
-Set-Content -Path $TmpPy -Value $PyMerge -Encoding utf8
-try { & $VenvPy $TmpPy } finally { Remove-Item $TmpPy -ErrorAction SilentlyContinue }
-if ($LASTEXITCODE -ne 0) { Die 'failed to update Claude Code settings' }
-Write-Ok 'Claude Code settings updated'
-
-# ---------------------------------------------------------------------------
-Write-Step '6/7 Start the proxy'
-function Test-ProxyHealth {
+    Write-Ok 'backed up existing Claude settings'
     try {
-        $r = Invoke-WebRequest "http://127.0.0.1:$Port/health/liveliness" -UseBasicParsing -TimeoutSec 2
-        return ($r.StatusCode -eq 200)
+        $Settings = Get-Content $ClaudeSettings -Raw | ConvertFrom-Json
     }
-    catch { return $false }
-}
-
-$PsExe = (Get-Process -Id $PID).Path
-if (-not $PsExe) { $PsExe = if ($OnWindows) { 'powershell.exe' } else { 'pwsh' } }
-
-if ($AutoStart) {
-    if ($OnWindows) {
-        $arg = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$StartScript`""
-        $action = New-ScheduledTaskAction -Execute $PsExe -Argument $arg
-        $trigger = New-ScheduledTaskTrigger -AtLogOn
-        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-            -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
-        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
-        Start-ScheduledTask -TaskName $TaskName
-        Write-Ok "scheduled task '$TaskName' registered (runs at logon, restarts on failure)"
-    }
-    else {
-        Write-Note 'auto-start Scheduled Task is Windows-only; starting a background process for this session'
-        Start-Process -FilePath $PsExe -ArgumentList @('-NoProfile', '-File', $StartScript) | Out-Null
-        Write-Ok 'proxy started (background process)'
+    catch {
+        Stop-WithError "invalid JSON in $ClaudeSettings`: $($_.Exception.Message)"
     }
 }
 else {
-    Write-Note "AutoStart disabled - start it yourself: `"$PsExe`" -File `"$StartScript`""
+    $Settings = [pscustomobject]@{}
 }
 
-# ---------------------------------------------------------------------------
-Write-Step '7/7 Verify'
-if ($AutoStart) {
-    $healthy = $false
-    # A fresh venv's first litellm import can be slow, so allow up to 60s.
-    for ($i = 0; $i -lt 60; $i++) { if (Test-ProxyHealth) { $healthy = $true; break }; Start-Sleep -Seconds 1 }
-    if (-not $healthy) {
-        Write-Note "proxy not healthy yet after 60s (cold start can be slow) - check $LogPath, then retry: curl http://127.0.0.1:$Port/health/liveliness"
-    }
-    else {
-        Write-Ok "proxy healthy on 127.0.0.1:$Port"
-        try {
-            $body = @{
-                model      = $Endpoint
-                max_tokens = 20
-                messages   = @(@{ role = 'user'; content = 'Reply with: OK' })
-            } | ConvertTo-Json -Depth 6
-            $resp = Invoke-RestMethod "http://127.0.0.1:$Port/v1/messages" -Method Post `
-                -Headers @{ Authorization = "Bearer $MasterKey"; 'anthropic-version' = '2023-06-01' } `
-                -ContentType 'application/json' -Body $body
-            if ($resp.type -eq 'message') {
-                Write-Ok '/v1/messages round-trip OK (native Anthropic response from Databricks)'
-            }
-            else {
-                Write-Note "/v1/messages test did not return an Anthropic message"
-            }
-            if ($FastEndpoint -ne $Endpoint) {
-                $bodyFast = @{
-                    model      = $FastEndpoint
-                    max_tokens = 20
-                    messages   = @(@{ role = 'user'; content = 'Reply with: OK' })
-                } | ConvertTo-Json -Depth 6
-                $respFast = Invoke-RestMethod "http://127.0.0.1:$Port/v1/messages" -Method Post `
-                    -Headers @{ Authorization = "Bearer $MasterKey"; 'anthropic-version' = '2023-06-01' } `
-                    -ContentType 'application/json' -Body $bodyFast
-                if ($respFast.type -eq 'message') {
-                    Write-Ok "small/fast model '$FastEndpoint' round-trip OK"
-                }
-                else {
-                    Write-Note "small/fast model '$FastEndpoint' did not return an Anthropic message"
-                }
-            }
-            foreach ($m in ($Models -split '[,\s]+' | Where-Object { $_ -and $_.Trim() })) {
-                $m = $m.Trim()
-                if ($m -ne $Endpoint -and $m -ne $FastEndpoint) {
-                    $bodyM = @{
-                        model      = $m
-                        max_tokens = 20
-                        messages   = @(@{ role = 'user'; content = 'Reply with: OK' })
-                    } | ConvertTo-Json -Depth 6
-                    $respM = Invoke-RestMethod "http://127.0.0.1:$Port/v1/messages" -Method Post `
-                        -Headers @{ Authorization = "Bearer $MasterKey"; 'anthropic-version' = '2023-06-01' } `
-                        -ContentType 'application/json' -Body $bodyM
-                    if ($respM.type -eq 'message') {
-                        Write-Ok "model '$m' round-trip OK (selectable via /model)"
-                    }
-                    else {
-                        Write-Note "model '$m' did not return an Anthropic message"
-                    }
-                }
-            }
-        }
-        catch {
-            Write-Note "/v1/messages test failed: $($_.Exception.Message)"
-        }
+if ($null -eq $Settings -or $Settings -is [array]) {
+    Stop-WithError "$ClaudeSettings must contain a JSON object"
+}
+
+if ($Settings.PSObject.Properties['env']) {
+    $ClaudeEnv = $Settings.env
+    if ($null -eq $ClaudeEnv -or $ClaudeEnv -is [array] -or $ClaudeEnv -is [string]) {
+        Stop-WithError "$ClaudeSettings`: 'env' must be a JSON object"
     }
 }
+else {
+    $ClaudeEnv = [pscustomobject]@{}
+}
+
+Remove-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_AUTH_TOKEN'
+Remove-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_API_KEY'
+Remove-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_DEFAULT_OPUS_MODEL'
+Remove-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_DEFAULT_SONNET_MODEL'
+Remove-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_DEFAULT_HAIKU_MODEL'
+Set-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_BASE_URL' -Value $AnthropicBaseUrl
+Set-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_MODEL' -Value $Endpoint
+Set-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_SMALL_FAST_MODEL' -Value $FastEndpoint
+Set-JsonProperty -Object $ClaudeEnv -Name 'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS' -Value '1'
+Set-JsonProperty -Object $ClaudeEnv -Name 'CLAUDE_CODE_API_KEY_HELPER_TTL_MS' -Value '900000'
+
+if ($Settings.PSObject.Properties['permissions']) {
+    $Permissions = $Settings.permissions
+    if ($null -eq $Permissions -or $Permissions -is [array] -or $Permissions -is [string]) {
+        Stop-WithError "$ClaudeSettings`: 'permissions' must be a JSON object"
+    }
+}
+else {
+    $Permissions = [pscustomobject]@{}
+}
+
+if ($Permissions.PSObject.Properties['deny']) {
+    if ($null -eq $Permissions.deny) {
+        $DenyRules = @()
+    }
+    elseif ($Permissions.deny -is [array]) {
+        $DenyRules = @($Permissions.deny)
+    }
+    else {
+        Stop-WithError "$ClaudeSettings`: 'permissions.deny' must be a JSON array"
+    }
+}
+else {
+    $DenyRules = @()
+}
+if ($DenyRules -notcontains 'WebSearch') {
+    $DenyRules += 'WebSearch'
+}
+Set-JsonProperty -Object $Permissions -Name 'deny' -Value $DenyRules
+
+$DefaultOpus = ''
+$DefaultSonnet = ''
+$DefaultHaiku = ''
+foreach ($model in $ValidatedModels) {
+    $model = $model.Trim()
+    if (-not $DefaultOpus -and $model -like '*opus*') { $DefaultOpus = $model }
+    if (-not $DefaultSonnet -and $model -like '*sonnet*') { $DefaultSonnet = $model }
+    if (-not $DefaultHaiku -and $model -like '*haiku*') { $DefaultHaiku = $model }
+}
+if (-not $DefaultOpus) { $DefaultOpus = $Endpoint }
+if (-not $DefaultSonnet) { $DefaultSonnet = $Endpoint }
+if (-not $DefaultHaiku) { $DefaultHaiku = $FastEndpoint }
+
+if ($DefaultOpus) {
+    Set-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_DEFAULT_OPUS_MODEL' -Value $DefaultOpus
+}
+if ($DefaultSonnet) {
+    Set-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_DEFAULT_SONNET_MODEL' -Value $DefaultSonnet
+}
+if ($DefaultHaiku) {
+    Set-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_DEFAULT_HAIKU_MODEL' -Value $DefaultHaiku
+}
+
+Set-JsonProperty -Object $Settings -Name 'apiKeyHelper' -Value $ApiKeyHelper
+Set-JsonProperty -Object $Settings -Name 'env' -Value $ClaudeEnv
+Set-JsonProperty -Object $Settings -Name 'permissions' -Value $Permissions
+$SettingsJson = ($Settings | ConvertTo-Json -Depth 20) + [Environment]::NewLine
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($ClaudeSettings, $SettingsJson, $Utf8NoBom)
+Write-Ok "configured direct Databricks access in $ClaudeSettings"
+
+if ($OnWindows) {
+    $LegacyTask = Get-ScheduledTask -TaskName $LegacyTaskName -ErrorAction SilentlyContinue
+    if ($LegacyTask) {
+        Stop-ScheduledTask -TaskName $LegacyTaskName -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $LegacyTaskName -Confirm:$false
+        Write-Ok "removed legacy LiteLLM Scheduled Task '$LegacyTaskName'"
+    }
+}
+if ((Test-Path (Join-Path $StateDir 'config.yaml')) -or (Test-Path (Join-Path $StateDir '.venv'))) {
+    Write-Note "legacy LiteLLM files remain in $StateDir but are no longer used"
+}
+
+Write-Step '6/6 Claude Code end-to-end test'
+$SavedConfigDir = $env:CLAUDE_CONFIG_DIR
+$VerifyDir = Join-Path ([System.IO.Path]::GetTempPath()) "claude-direct-$PID"
+New-Item -ItemType Directory -Force -Path $VerifyDir | Out-Null
+Copy-Item $ClaudeSettings (Join-Path $VerifyDir 'settings.json') -Force
+$env:CLAUDE_CONFIG_DIR = $VerifyDir
+
+try {
+    $RawOutput = (& claude --model $Endpoint `
+        -p 'Reply with exactly: DIRECT OK' --output-format json 2>&1 | Out-String).Trim()
+    $ClaudeExit = $LASTEXITCODE
+}
+finally {
+    if ($null -ne $SavedConfigDir) {
+        $env:CLAUDE_CONFIG_DIR = $SavedConfigDir
+    }
+    else {
+        Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
+    }
+    Remove-Item -Recurse -Force $VerifyDir -ErrorAction SilentlyContinue
+}
+
+try {
+    $ClaudeResult = $RawOutput | ConvertFrom-Json
+}
+catch {
+    Write-Host $RawOutput -ForegroundColor Red
+    Stop-WithError 'Claude Code returned invalid JSON'
+}
+
+if ($ClaudeExit -ne 0 -or $ClaudeResult.is_error -or $ClaudeResult.result -notmatch 'DIRECT OK') {
+    Write-Host $RawOutput -ForegroundColor Red
+    Stop-WithError 'Claude Code direct Databricks test failed'
+}
+Write-Ok 'Claude Code reached Databricks directly without LiteLLM'
 
 Write-Host ''
 Write-Ok 'Done.'
-Write-Host '  - Open a new terminal and run:  claude'
-Write-Host "  - Switch model in Claude Code:  /model <name>   (registered: $Models)"
-Write-Host "  - Manual start (if the task is off):  `"$PsExe`" -File `"$StartScript`""
-Write-Host "  - Manage task:  Get-ScheduledTask -TaskName '$TaskName' ; Stop-ScheduledTask -TaskName '$TaskName'"
-Write-Host "  - Logs:  $LogPath"
-Write-Host '  - Docs:  docs/claude-code-databricks.md'
+Write-Host '  - Start Claude Code:  claude'
+Write-Host '  - Switch model:      /model'
+Write-Host "  - Native API:        $AnthropicBaseUrl"
+Write-Host "  - Credential helper: $TokenHelper"
+Write-Host '  - Legacy LiteLLM files, if any, are inert and can be removed after review.'

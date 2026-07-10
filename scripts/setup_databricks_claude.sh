@@ -7,8 +7,8 @@
 #   2. Azure Databricks workspace
 #   3. Databricks PAT (via your Azure AD login) + .env
 #   4. Serving-endpoint verification
-#   5. Model connection test (target Claude endpoint + a Databricks-hosted
-#      fallback that proves the pipeline works)
+#   5. Model connection test through the supported OpenAI-compatible route,
+#      plus the native Anthropic Messages API for Claude
 #   6. (optional) a full run of src/agent_sample.py against a working endpoint
 #
 # Requirements: az (logged in: `az login`), and the project virtualenv at
@@ -47,6 +47,13 @@ die()  { printf "%s[x]%s %s\n"  "$c_red"   "$c_reset" "$*" >&2; exit 1; }
 
 aad_token() { az account get-access-token --resource "$DBX_AAD_RESOURCE" --query accessToken -o tsv; }
 
+curl_with_bearer() {
+  local token="$1"
+  shift
+  printf 'header = "Authorization: Bearer %s"\n' "$token" |
+    curl --config - "$@"
+}
+
 # ---------------------------------------------------------------------------
 log "0/6 Preflight"
 command -v az >/dev/null || die "az CLI not found. Install Azure CLI and run 'az login'."
@@ -79,11 +86,13 @@ ok "workspace URL: $HOST"
 
 # ---------------------------------------------------------------------------
 log "3/6 Databricks PAT + .env"
-TOKEN="$(curl -sS -X POST "$HOST/api/2.0/token/create" \
-  -H "Authorization: Bearer $(aad_token)" -H "Content-Type: application/json" \
+TOKEN="$(curl_with_bearer "$(aad_token)" -sS -X POST "$HOST/api/2.0/token/create" \
+  -H "Content-Type: application/json" \
   -d "{\"comment\":\"agent-sample-setup\",\"lifetime_seconds\":$PAT_LIFETIME_SECONDS}" \
   | "$PY" -c "import sys,json; print(json.load(sys.stdin).get('token_value',''))")"
 [ -n "$TOKEN" ] || die "Failed to create a PAT. Ensure token creation is enabled and you have workspace access."
+OLD_UMASK="$(umask)"
+umask 077
 cat > "$ROOT/.env" <<EOF
 # Azure Databricks workspace URL (스킴 포함)
 DATABRICKS_HOST=$HOST
@@ -94,14 +103,19 @@ DATABRICKS_SERVING_ENDPOINT=$ENDPOINT
 # Databricks Personal Access Token (PAT)
 DATABRICKS_TOKEN=$TOKEN
 EOF
+chmod 600 "$ROOT/.env"
+umask "$OLD_UMASK"
 ok ".env written (HOST + $ENDPOINT + PAT). PAT length: ${#TOKEN}"
 
 # ---------------------------------------------------------------------------
 if [ "$ACCOUNT_DIAG" = "1" ]; then
   log "3b/6 Account diagnostic (best-effort)"
-  "$PY" - "$HOST" "$TOKEN" <<'PY' || warn "account diagnostic skipped"
+  DIAG_HOST="$HOST" DIAG_TOKEN="$TOKEN" "$PY" - <<'PY' || warn "account diagnostic skipped"
+import os
 import sys
-host, token = sys.argv[1], sys.argv[2]
+
+host = os.environ["DIAG_HOST"]
+token = os.environ["DIAG_TOKEN"]
 try:
     from databricks.sdk import WorkspaceClient, AccountClient
 except Exception:
@@ -128,7 +142,7 @@ fi
 
 # ---------------------------------------------------------------------------
 log "4/6 Verify serving endpoints"
-EP_JSON="$(curl -sS -H "Authorization: Bearer $TOKEN" "$HOST/api/2.0/serving-endpoints")"
+EP_JSON="$(curl_with_bearer "$TOKEN" -sS "$HOST/api/2.0/serving-endpoints")"
 echo "$EP_JSON" | "$PY" -c "
 import sys,json
 d=json.load(sys.stdin); eps={e['name']:(e.get('state') or {}).get('ready') for e in d.get('endpoints',[])}
@@ -137,24 +151,48 @@ for name in ['$ENDPOINT','$FALLBACK']:
 "
 
 # ---------------------------------------------------------------------------
-# Smoke-test one endpoint. Echoes: '200' on success, or the error_code.
+SMOKE_FILE="$(mktemp "${TMPDIR:-/tmp}/databricks-smoke.XXXXXX")"
+ANTHROPIC_SMOKE_FILE="$(mktemp "${TMPDIR:-/tmp}/databricks-anthropic-smoke.XXXXXX")"
+cleanup_smoke_files() {
+  rm -f "$SMOKE_FILE" "$ANTHROPIC_SMOKE_FILE"
+}
+trap cleanup_smoke_files EXIT
+
+# Smoke-test one model through the OpenAI-compatible Foundation Model API.
 smoke() {
   local ep="$1"
-  curl -sS -o /tmp/_smoke.json -w "%{http_code}" -X POST \
-    "$HOST/serving-endpoints/$ep/invocations" \
-    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-    -d '{"messages":[{"role":"user","content":"Reply with exactly: OK"}],"max_tokens":10}'
+  curl_with_bearer "$TOKEN" -sS -o "$SMOKE_FILE" -w "%{http_code}" -X POST \
+    "$HOST/serving-endpoints/chat/completions" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"$ep\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}],\"max_tokens\":10}"
+}
+
+# Smoke-test Claude through the native Anthropic Messages API used by Claude Code.
+smoke_anthropic() {
+  local ep="$1"
+  curl_with_bearer "$TOKEN" -sS -o "$ANTHROPIC_SMOKE_FILE" -w "%{http_code}" -X POST \
+    "$HOST/serving-endpoints/anthropic/v1/messages" \
+    -H "Content-Type: application/json" \
+    -H "anthropic-version: 2023-06-01" \
+    -d "{\"model\":\"$ep\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}],\"max_tokens\":10}"
 }
 
 log "5/6 Model connection test"
 WORKING_ENDPOINT=""
 CODE="$(smoke "$ENDPOINT")"
 if [ "$CODE" = "200" ]; then
-  REPLY="$("$PY" -c "import json;print(json.load(open('/tmp/_smoke.json'))['choices'][0]['message']['content'])")"
-  ok "target '$ENDPOINT' responded: $REPLY"
+  REPLY="$("$PY" -c "import json,sys;print(json.load(open(sys.argv[1]))['choices'][0]['message']['content'])" "$SMOKE_FILE")"
+  ok "OpenAI-compatible route for '$ENDPOINT' responded: $REPLY"
   WORKING_ENDPOINT="$ENDPOINT"
+  NATIVE_CODE="$(smoke_anthropic "$ENDPOINT")"
+  if [ "$NATIVE_CODE" = "200" ]; then
+    NATIVE_TYPE="$("$PY" -c "import json,sys;print(json.load(open(sys.argv[1])).get('type',''))" "$ANTHROPIC_SMOKE_FILE")"
+    ok "native Anthropic route responded with type='$NATIVE_TYPE'"
+  else
+    warn "native Anthropic route failed for '$ENDPOINT' (HTTP $NATIVE_CODE)"
+  fi
 else
-  MSG="$("$PY" -c "import json;print(json.load(open('/tmp/_smoke.json')).get('message',''))" 2>/dev/null || true)"
+  MSG="$("$PY" -c "import json,sys;print(json.load(open(sys.argv[1])).get('message',''))" "$SMOKE_FILE" 2>/dev/null || true)"
   warn "target '$ENDPOINT' -> HTTP $CODE: $MSG"
   if echo "$MSG" | grep -q "rate limit of 0"; then
     cat <<EOF
@@ -170,20 +208,21 @@ EOF
   log "    trying Databricks-hosted fallback '$FALLBACK' to prove the pipeline…"
   CODE="$(smoke "$FALLBACK")"
   if [ "$CODE" = "200" ]; then
-    REPLY="$("$PY" -c "import json;print(json.load(open('/tmp/_smoke.json'))['choices'][0]['message']['content'])")"
+    REPLY="$("$PY" -c "import json,sys;print(json.load(open(sys.argv[1]))['choices'][0]['message']['content'])" "$SMOKE_FILE")"
     ok "fallback '$FALLBACK' responded: $REPLY  (auth + path + PAT all verified)"
     WORKING_ENDPOINT="$FALLBACK"
   else
     warn "fallback '$FALLBACK' also failed (HTTP $CODE)"
   fi
 fi
-rm -f /tmp/_smoke.json
+cleanup_smoke_files
+trap - EXIT
 
 # ---------------------------------------------------------------------------
 log "6/6 Agent sample run"
 if [ "$RUN_AGENT" = "1" ] && [ -n "$WORKING_ENDPOINT" ]; then
   ok "running src/agent_sample.py against '$WORKING_ENDPOINT'"
-  echo "" | DATABRICKS_SERVING_ENDPOINT="$WORKING_ENDPOINT" "$PY" src/agent_sample.py || true
+  echo "" | DATABRICKS_SERVING_ENDPOINT="$WORKING_ENDPOINT" "$PY" src/agent_sample.py
 else
   warn "skipped (RUN_AGENT=$RUN_AGENT, working_endpoint='${WORKING_ENDPOINT:-none}')"
 fi
