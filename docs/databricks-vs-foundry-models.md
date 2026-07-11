@@ -49,7 +49,7 @@ Foundry에서도 Claude는 Microsoft 모델이 아닙니다. 두 hosting option 
 Foundry에서 `Owner`나 `Contributor`만 있다고 Entra 기반 추론 권한이 생기지는 않습니다.
 호출 주체에는 별도로 `Foundry User`(구 `Azure AI User`)를 부여하는 것이 권장됩니다.
 `Cognitive Services User`는 `Foundry User`의 이전 이름이나 별칭이 아니라 별도의
-legacy Azure AI Services 역할이지만, Foundry resource 범위에서 Claude 모델 호출
+Azure AI Services 역할이지만, Foundry resource 범위에서 Claude 모델 호출
 권한도 제공합니다. Foundry project나 agent 작업에는 Foundry-native 역할을 사용하세요.
 반대로 배포 권한과 추론 권한은 같은 역할이 아닙니다. 모델 배포의
 `Contributor`/`Owner`는 resource group 범위이고, Marketplace offer 구독 권한은
