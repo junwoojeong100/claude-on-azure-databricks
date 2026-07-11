@@ -32,6 +32,7 @@
 #   ENV_FILE                  Credential source (default: repo .env)
 #   DATABRICKS_FAST_ENDPOINT  Claude Code Haiku/lightweight background model
 #   DATABRICKS_MODELS         Models used to map /model family presets
+#                             (Fable is opt-in because of its retention policy)
 #   LEGACY_LAUNCHD_LABEL      Previous LiteLLM launchd label
 
 set -euo pipefail
@@ -154,7 +155,8 @@ load_env_file
 : "${DATABRICKS_TOKEN:?DATABRICKS_TOKEN is required (in .env or the environment)}"
 
 ENDPOINT="${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-4-8}"
-MODELS="${DATABRICKS_MODELS:-databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5 databricks-claude-fable-5}"
+# Fable is intentionally excluded from the default probe list.
+MODELS="${DATABRICKS_MODELS:-databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5}"
 MODELS="${MODELS//,/ }"
 ANTHROPIC_BASE_URL="${DATABRICKS_HOST%/}/serving-endpoints/anthropic"
 
@@ -294,6 +296,7 @@ TOKEN_HELPER="$STATE_DIR/get-token.sh" \
 ANTHROPIC_BASE_URL="$ANTHROPIC_BASE_URL" \
 ENDPOINT="$ENDPOINT" \
 FAST_ENDPOINT="$FAST_ENDPOINT" \
+VALID_MODELS="$VALID_MODELS" \
 DEFAULT_OPUS="$DEFAULT_OPUS" \
 DEFAULT_SONNET="$DEFAULT_SONNET" \
 DEFAULT_HAIKU="$DEFAULT_HAIKU" \
@@ -363,9 +366,18 @@ for source, target in (
     if value:
         env[target] = value
 
+available_models = ["opus", "sonnet", "haiku"]
+if os.environ.get("DEFAULT_FABLE"):
+    available_models.append("fable")
+for model in os.environ["VALID_MODELS"].split():
+    if model not in available_models:
+        available_models.append(model)
+
 data["apiKeyHelper"] = shlex.quote(os.environ["TOKEN_HELPER"])
 data["env"] = env
 data["permissions"] = permissions
+data["availableModels"] = available_models
+data["enforceAvailableModels"] = True
 path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 PY
 ok "configured direct Databricks access in $CLAUDE_SETTINGS"

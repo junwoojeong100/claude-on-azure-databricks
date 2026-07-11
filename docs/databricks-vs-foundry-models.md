@@ -3,7 +3,8 @@
 > 최종 검증: 2026-07-11. 모델 가용성, 쿼터, 가격, Preview 상태는 자주 바뀌므로
 > 배포 전 [공식 문서](#공식-참고-문서)를 다시 확인하세요.
 >
-> 이 문서는 운영 선택을 위한 심화 비교입니다. 설치·실행은 [README](../README.md),
+> 이 문서는 운영 선택을 위한 심화 비교입니다. 실습 순서는 [README](../README.md),
+> 환경 준비는 [Azure Databricks 설정 가이드](azure-databricks-setup.md),
 > Claude Code 연결은 [직접 연결 가이드](claude-code-databricks.md)를 참고하세요.
 
 ## TL;DR
@@ -145,7 +146,7 @@ per-model plan을 유지할 수 있습니다. 정확한 비교 견적은 두 플
 Databricks의 현재 Claude pay-per-token 표에는 기본 ITPM/OTPM/QPH가 게시되어 있지만
 플랫폼 tier와 모델에 따라 달라질 수 있습니다. `403 ... rate limit of 0`은 일반 429와
 다르며, 메시지만으로 account entitlement 문제라고 단정하지 말고
-[README의 진단 순서](../README.md#5-문제-해결-troubleshooting)를 따르세요.
+[환경 설정 가이드의 진단 순서](azure-databricks-setup.md#자주-발생하는-문제)를 따르세요.
 
 Foundry 쿼터는 같은 subscription의 resource와 region이 공유할 수 있습니다. 검증 시점
 기준 Free Trial, Student, credit-based, Cloud Solution Provider(CSP), 그리고
@@ -254,8 +255,9 @@ Catalog, 대상 catalog의 `USE CATALOG`, schema의 `USE SCHEMA`와 `CREATE TABL
 있습니다.
 
 `system.serving.endpoint_usage`에는 `endpoint_name`이 없으므로
-`served_entity_id`로 `system.serving.served_entities`를 조인해야 합니다. README의
-[예시 SQL](../README.md#6-운영-모니터링-databricks)을 기준으로 사용하세요.
+`served_entity_id`로 `system.serving.served_entities`를 조인해야 합니다. 실제 쿼리는
+[Databricks system tables reference](https://learn.microsoft.com/azure/databricks/admin/system-tables/)의
+현재 스키마를 기준으로 작성하세요.
 다른 사용자에게 조회를 위임하려면 account admin과 metastore admin을 모두 보유한
 관리자가 `system` catalog와 대상 schema의 `USE`·`SELECT` 권한을 부여해야 합니다.
 이 일반 위임 절차는 `system.serving.*`에 적용할 수 있지만, 현재 Unity AI Gateway Beta
