@@ -14,7 +14,7 @@ Claude Code ──(Anthropic /v1/messages)──► Azure Databricks Model Servi
                                            /serving-endpoints/anthropic
 ```
 
-> 최종 검증: 2026-07-11, Claude Code 2.1.206, `databricks-claude-opus-4-8`,
+> 최종 검증: 2026-07-11, Claude Code 2.1.207, `databricks-claude-opus-4-8`,
 > 단일/다중 턴, high effort, `stop_sequences`, 도구 호출.
 
 ---
@@ -189,7 +189,7 @@ claude --disallowedTools WebSearch
 `The provided request is not valid`로 실패했습니다. 위 `--disallowedTools` 값은 해당
 실행에만 적용됩니다.
 
-반복 사용하려면 아래 설정을 `~/.claude/settings.json`에 병합하고, PAT를 평문으로
+반복 사용하려면 [§4](#4-생성되는-설정)의 설정을 `~/.claude/settings.json`에 병합하고, PAT를 평문으로
 저장하는 대신 `apiKeyHelper`를 구성하세요. 기존 `permissions.deny` 항목을 보존하면서
 `WebSearch`를 추가해야 합니다. 수동 검증을 마치면 현재 셸의 토큰도
 `unset ANTHROPIC_AUTH_TOKEN` 또는 `Remove-Item Env:ANTHROPIC_AUTH_TOKEN`으로 제거합니다.
@@ -264,6 +264,41 @@ Gateway의 `ucode` 구성을 사용하세요.
 OAuth 로그인이 필요하면 Unity AI Gateway의 `ucode`를 사용하거나, Databricks CLI/SDK가
 발급한 단기 토큰을 반환하는 별도 `apiKeyHelper`를 운영해야 합니다.
 
+운영용 OAuth M2M helper 예시입니다. 서비스 주체 M2M 프로필을 `.databrickscfg`에 한 번
+구성한 뒤, 단기 access token만 출력하도록 `get-token.sh`를 교체하고 `apiKeyHelper`로
+지정합니다. M2M은 대화형 브라우저 로그인(`databricks auth login`, U2M)이 아니라
+`.databrickscfg` 프로필로 설정합니다.
+
+```bash
+# 1) ~/.databrickscfg 에 서비스 주체 M2M 프로필을 추가 (client_id/secret 필요)
+cat >> ~/.databrickscfg <<'CFG'
+[databricks-sp]
+host          = https://<workspace>.azuredatabricks.net
+client_id     = <SERVICE_PRINCIPAL_CLIENT_ID>
+client_secret = <SERVICE_PRINCIPAL_OAUTH_SECRET>
+CFG
+
+# 2) ~/.claude-databricks/get-token.sh 를 아래 내용으로 교체
+#    databricks auth token 은 {"access_token","token_type":"Bearer","expiry"} 를 반환
+cat > ~/.claude-databricks/get-token.sh <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+databricks auth token -p databricks-sp \
+  | python3 -c 'import sys, json; print(json.load(sys.stdin)["access_token"])'
+SH
+chmod 700 ~/.claude-databricks/get-token.sh
+```
+
+이 access token은 약 1시간 수명이며, 설정된 `CLAUDE_CODE_API_KEY_HELPER_TTL_MS`(이
+리포 기본값 15분)마다 Claude Code가 만료 전에 helper를 다시 호출해 재발급합니다.
+`Bearer` 토큰이므로 Databricks 네이티브 Anthropic 엔드포인트 인증과 그대로 맞습니다.
+자동 설정기는 이 M2M helper를 생성하지 않으므로 운영 환경에서만 위 helper로 교체하세요.
+서비스 주체 OAuth secret 발급은
+[OAuth M2M 설정](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m),
+CLI 프로필 구성은
+[Databricks CLI 인증](https://learn.microsoft.com/azure/databricks/dev-tools/cli/authentication)을
+참고하세요.
+
 ### Custom base URL에서 달라지는 Claude Code 기능
 
 Claude Code는 `ANTHROPIC_BASE_URL`이 `api.anthropic.com`이 아닌 호스트를 가리키면 MCP
@@ -272,7 +307,7 @@ tool search를 기본 비활성화하고 Remote Control도 비활성화합니다
 임의로 켜지 마세요. 일반 MCP 서버와 로컬 도구 호출은 이 제한과 별개입니다.
 
 `--settings <custom.json>`은 기존 settings와 병합되며 `apiKeyHelper`도 사용할 수
-있습니다. Claude Code 2.1.206에서 custom settings 파일과 helper 조합을 직접
+있습니다. Claude Code 2.1.207에서 custom settings 파일과 helper 조합을 직접
 검증했습니다. 완전히 격리된 검증이 필요할 때만 `CLAUDE_CONFIG_DIR`을 별도 디렉터리로
 지정하세요.
 

@@ -3,7 +3,7 @@
 로컬 Claude Code를 Azure Databricks-hosted Claude에 연결할 때 필요한 요건과 운영
 주의사항을 정리한 공유용 체크리스트입니다.
 
-> 최종 검증: 2026-07-11, Claude Code 2.1.206.
+> 최종 검증: 2026-07-11, Claude Code 2.1.207.
 
 > 실제 설치는 [`claude-code-databricks.md`](./claude-code-databricks.md),
 > 자동 설정은 [`scripts/setup_claude_code_databricks.sh`](../scripts/setup_claude_code_databricks.sh)
