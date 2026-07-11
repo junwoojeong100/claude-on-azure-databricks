@@ -35,7 +35,7 @@ Claude Code ──(Anthropic /v1/messages)──► Azure Databricks
 - Databricks-hosted Claude 모델
   - 기본: `databricks-claude-opus-4-8`
   - Sonnet 프리셋: `databricks-claude-sonnet-5`
-  - Haiku/백그라운드: `databricks-claude-haiku-4-5`
+  - Haiku/경량 백그라운드: `databricks-claude-haiku-4-5`
   - Fable 후보: `databricks-claude-fable-5` (현재 workspace에서 실제 호출이 성공할 때만 매핑)
 - 모델 호출 권한이 있는 Databricks 인증 정보
   - 개발: PAT(legacy; 가능하면 서비스 주체 PAT)
@@ -66,13 +66,18 @@ cross-Geo, rate limit, 권한, 계정 용량 점검 순서를 확인합니다.
 | `apiKeyHelper` | 보호된 파일 또는 OAuth helper에서 Databricks 토큰 반환 |
 | `ANTHROPIC_MODEL` | 기본 Claude 모델 |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` | `/model`의 Opus/Sonnet 프리셋 매핑 |
-| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Haiku 프리셋과 요약·분류 등 백그라운드 모델 |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Haiku 프리셋과 세션 제목 생성 등 경량 백그라운드 모델 |
 | `ANTHROPIC_DEFAULT_FABLE_MODEL` | Fable endpoint가 실제 검증된 경우에만 설정 |
 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` | `1`; 미지원 beta 헤더와 beta 도구 스키마 필드 제거 |
 | `permissions.deny` | 기존 규칙을 보존하고 bare `WebSearch` 추가 |
 
 > PAT를 `ANTHROPIC_AUTH_TOKEN`으로 `settings.json`에 직접 저장하지 않는 것을
 > 권장합니다. 자동 설정 스크립트는 0600 파일과 `apiKeyHelper`를 사용합니다.
+
+> Claude Code 2.1.207 검증에서 auto 권한 모드의 LLM 분류기는
+> `ANTHROPIC_DEFAULT_HAIKU_MODEL`이 아닌 현재 메인 모델을 사용했습니다.
+> deprecated `ANTHROPIC_SMALL_FAST_MODEL`은 설정하지 않아도 됩니다.
+
 > 자동 설정기는 PAT helper만 생성합니다. OAuth M2M은 별도 단기 토큰 helper가 필요합니다.
 > Opus/Sonnet은 검증된 같은 family 후보를 우선하고 없으면 기본 모델로 fallback합니다.
 > Haiku 검증이 실패하면 같은 기본 모델을 사용하며 `DATABRICKS_MODELS`의 다른 Haiku
@@ -136,7 +141,7 @@ ucode claude
 
 - Claude Code를 네이티브 Anthropic URL로 전환
 - 기존 로컬 프록시 키 제거
-- 기존 `ANTHROPIC_SMALL_FAST_MODEL` 값을 Haiku/background 설정으로 마이그레이션
+- 기존 `ANTHROPIC_SMALL_FAST_MODEL` 값을 Haiku 프리셋으로 이관한 뒤 deprecated key 제거
 - launchd/systemd/Scheduled Task 비활성화
 - 기존 LiteLLM 파일은 안전을 위해 자동 삭제하지 않음
 
@@ -155,7 +160,7 @@ ucode claude
 - [ ] 셸/프로필에 `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`가 남아 있지 않음
 - [ ] `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`
 - [ ] `permissions.deny`에 bare `WebSearch`가 있음
-- [ ] Haiku 백그라운드 모델과 `/model` 프리셋 매핑 확인
+- [ ] Haiku 경량 백그라운드 모델과 `/model` 프리셋 매핑 확인
 - [ ] Fable 사용 시 endpoint 검증과 30일 보존·사람 검토 정책 승인 완료
 - [ ] Claude Code 단일/다중 턴 검증
 - [ ] custom base URL에서 Remote Control/MCP tool search 제한을 인지함

@@ -36,7 +36,7 @@ if [ -n "${DATABRICKS_MODELS:-}" ]; then
   MODELS_EXPLICIT=1
 fi
 ENDPOINT="${ENDPOINT:-${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-4-8}}"  # target model
-DATABRICKS_FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-}"     # optional Claude Code background model
+DATABRICKS_FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-}"     # optional Haiku/lightweight background model
 DATABRICKS_MODELS="${DATABRICKS_MODELS:-}"                   # optional Claude Code model aliases
 FALLBACK="${FALLBACK:-databricks-meta-llama-3-3-70b-instruct}"  # proves pipeline
 PAT_LIFETIME_SECONDS="${PAT_LIFETIME_SECONDS:-7776000}"    # 90 days
@@ -206,7 +206,7 @@ EOF
 if [ -n "$DATABRICKS_FAST_ENDPOINT" ]; then
   cat >> "$ROOT/.env" <<EOF
 
-# Claude Code Haiku/background model
+# Claude Code Haiku/lightweight background model
 DATABRICKS_FAST_ENDPOINT=$DATABRICKS_FAST_ENDPOINT
 EOF
 fi

@@ -30,7 +30,7 @@
 #   CLAUDE_SETTINGS           Claude Code settings path
 #                             (default: ~/.claude/settings.json)
 #   ENV_FILE                  Credential source (default: repo .env)
-#   DATABRICKS_FAST_ENDPOINT  Claude Code Haiku/background model
+#   DATABRICKS_FAST_ENDPOINT  Claude Code Haiku/lightweight background model
 #   DATABRICKS_MODELS         Models used to map /model family presets
 #   LEGACY_LAUNCHD_LABEL      Previous LiteLLM launchd label
 
@@ -205,7 +205,7 @@ fi
 
 FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-databricks-claude-haiku-4-5}"
 ok "native Anthropic API: $ANTHROPIC_BASE_URL"
-ok "default model: $ENDPOINT   Haiku/background: $FAST_ENDPOINT"
+ok "default model: $ENDPOINT   Haiku/lightweight background: $FAST_ENDPOINT"
 CLAUDE_VERSION="$(claude --version 2>/dev/null | head -1)"
 ok "Claude Code: $CLAUDE_VERSION"
 if ! "$PYTHON" -c 'import re,sys; m=re.search(r"\d+(?:\.\d+){2}", sys.argv[1]); raise SystemExit(0 if m and tuple(map(int, m.group().split("."))) >= (2, 1, 197) else 1)' "$CLAUDE_VERSION"; then
@@ -222,9 +222,9 @@ fi
 
 if [ "$FAST_ENDPOINT" != "$ENDPOINT" ]; then
   if native_request "$FAST_ENDPOINT"; then
-    ok "Haiku/background model '$FAST_ENDPOINT' returned an Anthropic message"
+    ok "Haiku/lightweight background model '$FAST_ENDPOINT' returned an Anthropic message"
   else
-    warn "Haiku/background model '$FAST_ENDPOINT' failed (HTTP $NATIVE_HTTP_CODE); using '$ENDPOINT'"
+    warn "Haiku/lightweight background model '$FAST_ENDPOINT' failed (HTTP $NATIVE_HTTP_CODE); using '$ENDPOINT'"
     FAST_ENDPOINT="$ENDPOINT"
   fi
 fi

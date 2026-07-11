@@ -207,7 +207,7 @@ if (-not $Models) {
 
 $AnthropicBaseUrl = $DbxHost.TrimEnd('/') + '/serving-endpoints/anthropic'
 Write-Ok "native Anthropic API: $AnthropicBaseUrl"
-Write-Ok "default model: $Endpoint   Haiku/background: $FastEndpoint"
+Write-Ok "default model: $Endpoint   Haiku/lightweight background: $FastEndpoint"
 
 Write-Step '2/6 Preflight'
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
@@ -232,10 +232,10 @@ Write-Ok "main model '$Endpoint' returned an Anthropic message"
 
 if ($FastEndpoint -ne $Endpoint) {
     if (Test-NativeModel -Model $FastEndpoint) {
-        Write-Ok "Haiku/background model '$FastEndpoint' returned an Anthropic message"
+        Write-Ok "Haiku/lightweight background model '$FastEndpoint' returned an Anthropic message"
     }
     else {
-        Write-Note "Haiku/background model '$FastEndpoint' failed; using '$Endpoint'"
+        Write-Note "Haiku/lightweight background model '$FastEndpoint' failed; using '$Endpoint'"
         $FastEndpoint = $Endpoint
     }
 }
