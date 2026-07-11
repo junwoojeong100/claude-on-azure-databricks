@@ -37,7 +37,7 @@ if [ -n "${DATABRICKS_MODELS:-}" ]; then
 fi
 ENDPOINT="${ENDPOINT:-${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-4-8}}"  # target model
 DATABRICKS_FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-}"     # optional Haiku/lightweight background model
-DATABRICKS_MODELS="${DATABRICKS_MODELS:-}"                   # optional Claude Code model aliases
+DATABRICKS_MODELS="${DATABRICKS_MODELS:-}"                   # optional Claude Code preset candidates
 FALLBACK="${FALLBACK:-databricks-meta-llama-3-3-70b-instruct}"  # proves pipeline
 PAT_LIFETIME_SECONDS="${PAT_LIFETIME_SECONDS:-7776000}"    # 90 days
 ROTATE_PAT="${ROTATE_PAT:-0}"                              # 1 creates a new PAT
@@ -120,7 +120,7 @@ az account show >/dev/null 2>&1 || die "Not logged in. Run 'az login' first."
 az extension show --name databricks >/dev/null 2>&1 ||
   die "Azure CLI Databricks extension not found. Run: az extension add --name databricks --upgrade"
 [ -x "$PY" ] ||
-  die "venv not found at .venv. Create it with a Python 3.10+ interpreter as documented in README.md."
+  die "venv not found at .venv. Follow docs/azure-databricks-setup.md with Python 3.10+."
 "$PY" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' ||
   die "Python 3.10 or newer is required in .venv."
 SUB_NAME="$(az account show --query name -o tsv)"

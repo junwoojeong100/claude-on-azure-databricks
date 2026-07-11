@@ -201,7 +201,8 @@ if (-not $Models) {
         $env:DATABRICKS_MODELS
     }
     else {
-        'databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5 databricks-claude-fable-5'
+        # Fable is opt-in because its prompts and responses have a retention policy.
+        'databricks-claude-opus-4-8 databricks-claude-sonnet-5 databricks-claude-haiku-4-5'
     }
 }
 
@@ -407,9 +408,18 @@ if ($DefaultFable) {
     Set-JsonProperty -Object $ClaudeEnv -Name 'ANTHROPIC_DEFAULT_FABLE_MODEL' -Value $DefaultFable
 }
 
+$AvailableModels = @('opus', 'sonnet', 'haiku')
+if ($DefaultFable) {
+    $AvailableModels += 'fable'
+}
+$AvailableModels += $ValidatedModels
+$AvailableModels = @($AvailableModels | Select-Object -Unique)
+
 Set-JsonProperty -Object $Settings -Name 'apiKeyHelper' -Value $ApiKeyHelper
 Set-JsonProperty -Object $Settings -Name 'env' -Value $ClaudeEnv
 Set-JsonProperty -Object $Settings -Name 'permissions' -Value $Permissions
+Set-JsonProperty -Object $Settings -Name 'availableModels' -Value $AvailableModels
+Set-JsonProperty -Object $Settings -Name 'enforceAvailableModels' -Value $true
 $SettingsJson = ($Settings | ConvertTo-Json -Depth 20) + [Environment]::NewLine
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($ClaudeSettings, $SettingsJson, $Utf8NoBom)
