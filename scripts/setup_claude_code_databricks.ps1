@@ -73,6 +73,11 @@ function Remove-JsonProperty {
     }
 }
 
+function Test-JsonObject {
+    param([AllowNull()] $Value)
+    return $null -ne $Value -and $Value.GetType() -eq [System.Management.Automation.PSCustomObject]
+}
+
 function Test-NativeModel {
     param([Parameter(Mandatory)] [string]$Model)
 
@@ -321,13 +326,13 @@ else {
     $Settings = [pscustomobject]@{}
 }
 
-if ($null -eq $Settings -or $Settings -is [array]) {
+if (-not (Test-JsonObject $Settings)) {
     Stop-WithError "$ClaudeSettings must contain a JSON object"
 }
 
 if ($Settings.PSObject.Properties['env']) {
     $ClaudeEnv = $Settings.env
-    if ($null -eq $ClaudeEnv -or $ClaudeEnv -is [array] -or $ClaudeEnv -is [string]) {
+    if (-not (Test-JsonObject $ClaudeEnv)) {
         Stop-WithError "$ClaudeSettings`: 'env' must be a JSON object"
     }
 }
@@ -349,7 +354,7 @@ Set-JsonProperty -Object $ClaudeEnv -Name 'CLAUDE_CODE_API_KEY_HELPER_TTL_MS' -V
 
 if ($Settings.PSObject.Properties['permissions']) {
     $Permissions = $Settings.permissions
-    if ($null -eq $Permissions -or $Permissions -is [array] -or $Permissions -is [string]) {
+    if (-not (Test-JsonObject $Permissions)) {
         Stop-WithError "$ClaudeSettings`: 'permissions' must be a JSON object"
     }
 }

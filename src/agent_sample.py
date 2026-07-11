@@ -93,9 +93,7 @@ SAMPLE_QUESTIONS = [
 ]
 
 
-_ZERO_RATE_LIMIT_ERROR_HINTS = (
-    "rate limit of 0",
-)
+_ZERO_RATE_LIMIT_ERROR_HINTS = ("rate limit of 0",)
 
 
 def _looks_like_zero_rate_limit_error(exc: BaseException) -> bool:
@@ -117,8 +115,7 @@ def _print_zero_rate_limit_help(endpoint: str) -> None:
         "  - 모델 호출 권한과 계정별 Anthropic 용량이 활성화됐는지\n\n"
         "Databricks 자체 모델은 성공하고 Claude만 실패하면 모델별 가용성 또는 용량\n"
         "문제일 가능성이 높습니다. 필요한 경우 Azure Databricks account team에\n"
-        "현재 account/workspace/model 정보를 전달해 확인하세요.\n"
-        + "=" * 60
+        "현재 account/workspace/model 정보를 전달해 확인하세요.\n" + "=" * 60
     )
 
 
