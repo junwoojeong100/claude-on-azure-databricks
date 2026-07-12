@@ -34,10 +34,11 @@ Claude Code ──(Anthropic /v1/messages)──► Azure Databricks
   - Opus 4.8: 2.1.154+
   - Fable 5: 2.1.170+
   - Sonnet 5: 2.1.197+
+  - `enforceAvailableModels`의 `Default` 잠금: 2.1.175+
 
 ## 필수 설정
 
-- [ ] `ANTHROPIC_BASE_URL=https://<workspace>/serving-endpoints/anthropic`
+- [ ] `ANTHROPIC_BASE_URL=https://<workspace-host>/serving-endpoints/anthropic`
 - [ ] `ANTHROPIC_DEFAULT_OPUS_MODEL`
 - [ ] `ANTHROPIC_DEFAULT_SONNET_MODEL`
 - [ ] `ANTHROPIC_DEFAULT_HAIKU_MODEL`
@@ -64,11 +65,14 @@ Claude Code ──(Anthropic /v1/messages)──► Azure Databricks
 ## 보안·운영 확인
 
 - [ ] `.env`와 token helper 파일이 Git에 포함되지 않음
+- [ ] 전역 `~/.claude/settings.json` 영향 승인 또는 리포 로컬 settings 선택
+- [ ] 설치 전 settings 백업 위치와 복원 절차 확인
 - [ ] 운영 환경은 PAT 대신 서비스 주체 OAuth M2M 검토
 - [ ] Fable 5 사용 시 30일 보존과 일부 사람 검토 정책 승인
 - [ ] Custom base URL에서 MCP tool search와 Remote Control 제한 인지
 - [ ] Unity AI Gateway와 serving endpoint AI Gateway를 구분
 - [ ] 모델·리전, cross-Geo, rate limit, 계정 용량 변경 가능성 검토
+- [ ] 종료 시 settings 복원, helper/.env 제거, 유지 중인 workspace의 PAT 폐기
 
 ## 문제 발생 시 우선순위
 

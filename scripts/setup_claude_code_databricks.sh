@@ -19,7 +19,7 @@
 # Usage:
 #   scripts/setup_claude_code_databricks.sh
 #
-#   DATABRICKS_HOST=https://adb-xxx.azuredatabricks.net \
+#   DATABRICKS_HOST=https://adb-1234567890123456.7.azuredatabricks.net \
 #   DATABRICKS_TOKEN=dapi... \
 #   DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8 \
 #   scripts/setup_claude_code_databricks.sh
@@ -113,7 +113,24 @@ native_request() {
   NATIVE_BODY="${response%$'\n'*}"
 
   [ "$NATIVE_HTTP_CODE" = "200" ] &&
-    printf "%s" "$NATIVE_BODY" | grep -Eq '"type"[[:space:]]*:[[:space:]]*"message"'
+    printf "%s" "$NATIVE_BODY" | "$PYTHON" -c '
+import json
+import sys
+
+try:
+    data = json.load(sys.stdin)
+except json.JSONDecodeError:
+    raise SystemExit(1)
+raise SystemExit(0 if isinstance(data, dict) and data.get("type") == "message" else 1)
+'
+}
+
+native_result_summary() {
+  if [ "$NATIVE_HTTP_CODE" = "200" ]; then
+    printf "HTTP 200 without Anthropic type='message'"
+  else
+    printf "HTTP %s" "$NATIVE_HTTP_CODE"
+  fi
 }
 
 disable_legacy_proxy() {
@@ -210,6 +227,9 @@ ok "native Anthropic API: $ANTHROPIC_BASE_URL"
 ok "default model: $ENDPOINT   Haiku/lightweight background: $FAST_ENDPOINT"
 CLAUDE_VERSION="$(claude --version 2>/dev/null | head -1)"
 ok "Claude Code: $CLAUDE_VERSION"
+if ! "$PYTHON" -c 'import re,sys; m=re.search(r"\d+(?:\.\d+){2}", sys.argv[1]); raise SystemExit(0 if m and tuple(map(int, m.group().split("."))) >= (2, 1, 175) else 1)' "$CLAUDE_VERSION"; then
+  warn "Claude Code 2.1.175+ is required for enforceAvailableModels to lock the Default option"
+fi
 if ! "$PYTHON" -c 'import re,sys; m=re.search(r"\d+(?:\.\d+){2}", sys.argv[1]); raise SystemExit(0 if m and tuple(map(int, m.group().split("."))) >= (2, 1, 197) else 1)' "$CLAUDE_VERSION"; then
   warn "Claude Code 2.1.197+ is recommended for the default Sonnet 5 mapping"
 fi
@@ -219,14 +239,14 @@ if native_request "$ENDPOINT"; then
   ok "main model '$ENDPOINT' returned an Anthropic message"
 else
   printf "%s\n" "$NATIVE_BODY" >&2
-  die "native Anthropic request failed for '$ENDPOINT' (HTTP $NATIVE_HTTP_CODE)"
+  die "native Anthropic request failed for '$ENDPOINT' ($(native_result_summary))"
 fi
 
 if [ "$FAST_ENDPOINT" != "$ENDPOINT" ]; then
   if native_request "$FAST_ENDPOINT"; then
     ok "Haiku/lightweight background model '$FAST_ENDPOINT' returned an Anthropic message"
   else
-    warn "Haiku/lightweight background model '$FAST_ENDPOINT' failed (HTTP $NATIVE_HTTP_CODE); using '$ENDPOINT'"
+    warn "Haiku/lightweight background model '$FAST_ENDPOINT' failed ($(native_result_summary)); using '$ENDPOINT'"
     FAST_ENDPOINT="$ENDPOINT"
   fi
 fi
@@ -239,7 +259,7 @@ for model in $MODELS; do
     ok "selectable model '$model' returned an Anthropic message"
     VALID_MODELS="$VALID_MODELS $model"
   else
-    warn "selectable model '$model' failed validation (HTTP $NATIVE_HTTP_CODE); using a validated family fallback"
+    warn "selectable model '$model' failed validation ($(native_result_summary)); using a validated family fallback"
   fi
 done
 

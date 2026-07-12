@@ -1,0 +1,58 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  bash:
+    name: Bash
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check syntax
+        run: bash -n scripts/*.sh
+      - name: Run ShellCheck
+        run: shellcheck scripts/*.sh
+
+  powershell:
+    name: PowerShell
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer `
+            -RequiredVersion 1.25.0 `
+            -Scope CurrentUser `
+            -Force
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer `
+            -Path scripts/setup_claude_code_databricks.ps1 `
+            -Settings .psscriptanalyzer.psd1
+          $results | Format-Table -AutoSize
+          if ($results) {
+              throw "PSScriptAnalyzer found $($results.Count) issue(s)."
+          }
+
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Compile Python
+        run: python -m py_compile src/agent_sample.py tests/test_setup_scripts.py
+      - name: Run tests
+        run: python -m unittest discover -s tests -v

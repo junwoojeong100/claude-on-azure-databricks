@@ -14,7 +14,7 @@ Claude Code ──(Anthropic /v1/messages)──► Azure Databricks
 `ANTHROPIC_BASE_URL`에는 `/v1/messages`를 제외한 다음 URL을 설정합니다.
 
 ```text
-https://<workspace>/serving-endpoints/anthropic
+https://<workspace-host>/serving-endpoints/anthropic
 ```
 
 Claude Code가 마지막 `/v1/messages`를 붙입니다.
@@ -29,11 +29,11 @@ Claude Code가 마지막 `/v1/messages`를 붙입니다.
 
 | 위치 | 역할 |
 | --- | --- |
-| `~/.claude/settings.json` | Databricks Anthropic URL, 모델 프리셋, `apiKeyHelper` |
+| 선택한 settings 파일(기본 `~/.claude/settings.json`) | Databricks Anthropic URL, 모델 프리셋, `apiKeyHelper` |
 | `~/.claude-databricks/.env` | Credential source; helper가 `DATABRICKS_TOKEN`을 읽음 |
 | `~/.claude-databricks/get-token.sh` | macOS/Linux credential helper |
 | `~/.claude-databricks/get-token.ps1` | Windows credential helper |
-| `~/.claude/settings.json.bak.<timestamp>` | 기존 Claude 설정 백업 |
+| `<settings-file>.bak.<timestamp>` | 기존 Claude 설정 백업 |
 
 macOS/Linux에서는 state directory가 `0700`, token 파일이 `0600`, helper가 `0700`으로
 설정됩니다. Windows에서는 현재 사용자만 수정할 수 있도록 ACL을 제한합니다.
@@ -54,6 +54,36 @@ Databricks 모델 밖으로 나가지 않게 합니다. Fable은 명시적으로
 이 리포가 쓰는 사용자 `settings.json`은 현재 사용자 범위의 보호 장치입니다. 조직
 전체 강제 정책은 같은 두 키를 최고 우선순위 managed/policy settings에 배포해야 하며,
 managed 설정이 있으면 사용자 목록보다 우선합니다.
+`enforceAvailableModels`가 `/model`의 `Default` 옵션까지 잠그는 동작은 Claude Code
+2.1.175 이상에서 지원됩니다.
+
+기본 경로는 모든 프로젝트에 적용됩니다. 기존 Anthropic 연결을 프로젝트별로 유지하려면
+`CLAUDE_SETTINGS=.claude/settings.local.json` 또는 PowerShell의 `-ClaudeSettings`로
+리포 로컬 파일을 선택합니다. 공유용 `.claude/settings.json`과 달리
+`settings.local.json`은 이 리포의 `.gitignore`에 포함됩니다.
+
+### 백업에서 복원
+
+설치기는 기존 settings 파일이 있을 때마다 같은 디렉터리에 timestamp 백업을 만듭니다.
+설치 직전 백업을 선택하고, 이후 추가한 설정이 있다면 복원 전에 비교하세요.
+
+macOS/Linux 기본 경로:
+
+```bash
+ls -1t "$HOME"/.claude/settings.json.bak.*
+cp "$HOME/.claude/settings.json.bak.<timestamp>" "$HOME/.claude/settings.json"
+```
+
+Windows 기본 경로:
+
+```powershell
+Get-ChildItem "$HOME\.claude\settings.json.bak.*" |
+    Sort-Object LastWriteTime -Descending
+Copy-Item "$HOME\.claude\settings.json.bak.<timestamp>" `
+    "$HOME\.claude\settings.json" -Force
+```
+
+사용자 지정 settings 파일은 해당 파일 옆의 `.bak.<timestamp>`를 복원합니다.
 
 ## 3. 필수 설정의 이유
 
@@ -121,7 +151,7 @@ access token을 발급받도록 구성할 수 있습니다.
 `~/.claude-databricks/m2m.env`를 만들고 `0600`으로 제한합니다.
 
 ```dotenv
-DATABRICKS_HOST=https://<workspace>.azuredatabricks.net
+DATABRICKS_HOST=https://<workspace-host>
 DATABRICKS_CLIENT_ID=<service-principal-client-id>
 DATABRICKS_CLIENT_SECRET=<service-principal-oauth-secret>
 ```
@@ -292,7 +322,43 @@ Remove-Item -Force `
 
 직접 연결에서도 사용하는 `.env`와 `get-token.*`은 삭제하지 않습니다.
 
-## 10. 문제 해결
+## 10. Databricks 직접 연결 제거
+
+Claude Code를 설치 전 상태로 되돌릴 때는 다음 순서를 사용합니다.
+
+1. 실행 중인 Claude Code 세션 종료
+2. [백업에서 복원](#백업에서-복원) 절차로 설치 직전 settings 복원
+3. 더 이상 필요하지 않은 helper와 credential 제거
+4. 기존 workspace를 유지한다면 해당 PAT를 workspace UI에서 폐기
+
+macOS/Linux:
+
+```bash
+# 다른 Claude settings가 사용하지 않을 때만 삭제
+rm -rf "$HOME/.claude-databricks"
+rm -f .env
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item "$HOME\.claude-databricks" -Recurse -Force `
+    -ErrorAction SilentlyContinue
+Remove-Item .env -Force -ErrorAction SilentlyContinue
+```
+
+리포 로컬 `settings.local.json`을 사용했다면 그 파일을 복원하거나, 설치 전에 파일이
+없었고 다른 로컬 설정도 없다면 삭제합니다. 백업이 없거나 설치 후 settings를 수정했다면
+파일 전체를 덮어쓰지 말고 Databricks `ANTHROPIC_*`, `apiKeyHelper`,
+`availableModels`, `enforceAvailableModels`, `WebSearch` deny 변경을 검토해 병합하세요.
+
+Workspace를 삭제하면 그 workspace의 PAT는 더 이상 유효하지 않지만 로컬 파일은 자동
+삭제되지 않습니다. 기존 workspace를 유지하는 경우에는 로컬 파일 삭제만으로 PAT가
+폐기되지 않으므로 UI에서 token을 명시적으로 revoke합니다. 기본 state directory를
+다른 Claude settings도 참조한다면 전체 디렉터리 대신 더 이상 쓰지 않는 credential만
+선별해 제거합니다.
+
+## 11. 문제 해결
 
 | 증상 | 원인 / 해결 |
 | --- | --- |
@@ -304,6 +370,7 @@ Remove-Item -Force `
 | `/model`의 모델 실패 | 실제 endpoint ID와 리전 가용성 확인 |
 | Fable이 picker에 없음 | Endpoint 검증 실패 또는 Claude Code 최소 버전 미충족 |
 | `web_search_*` 400 | Bare `WebSearch` deny 또는 별도 MCP 검색 사용 |
+| HTTP 200이지만 `type: "message"`가 없음 | Anthropic 경로, Claude 모델 ID, gateway의 응답 변형 여부 확인 |
 | MCP tool search/Remote Control 없음 | Custom base URL의 기본 제한 |
 | 포트 4000 listener가 남음 | 이전 LiteLLM PID를 확인한 뒤 해당 PID만 종료 |
 
@@ -321,7 +388,11 @@ lsof -nP -iTCP:4000 -sTCP:LISTEN
 - [Foundation model Unity Catalog permissions](https://learn.microsoft.com/azure/databricks/machine-learning/foundation-model-apis/model-uc-permissions)
 - [OAuth M2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m)
 - [Databricks CLI authentication](https://learn.microsoft.com/azure/databricks/dev-tools/cli/authentication)
+- [Personal access tokens](https://learn.microsoft.com/azure/databricks/dev-tools/auth/pat#create-personal-access-tokens-for-workspace-users)
+- [`tokens` command group](https://learn.microsoft.com/azure/databricks/dev-tools/cli/reference/tokens-commands)
+- [Per-workspace URLs](https://learn.microsoft.com/azure/databricks/workspace/per-workspace-urls)
 - [Unity AI Gateway coding-agent integration](https://learn.microsoft.com/azure/databricks/ai-gateway/coding-agent-integration-model-services)
 - [Unity AI Gateway model provider service integration](https://learn.microsoft.com/azure/databricks/ai-gateway/coding-agent-integration-model-provider-services)
 - [Unity AI Gateway Coding CLI (`ucode`)](https://github.com/databricks/ucode)
+- [Claude Code settings scopes](https://code.claude.com/docs/en/settings#configuration-scopes)
 - [Claude Code model configuration](https://code.claude.com/docs/en/model-config)

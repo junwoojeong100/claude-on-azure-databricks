@@ -6,7 +6,7 @@ Claude Code는 이 API에 직접 연결할 수 있습니다.
 ```text
 Claude Code
   └─ Anthropic Messages API
-      └─ https://<workspace>/serving-endpoints/anthropic/v1/messages
+      └─ https://<workspace-host>/serving-endpoints/anthropic/v1/messages
 ```
 
 **LiteLLM, 로컬 프록시, 별도 포트, 백그라운드 서비스는 필요하지 않습니다.**
@@ -41,6 +41,14 @@ claude --version
 | Fable 5 | 2.1.170 이상 |
 | Sonnet 5 | 2.1.197 이상 |
 
+`enforceAvailableModels`로 `/model`의 `Default` 옵션까지 잠그는 동작은 Claude Code
+2.1.175 이상에서 지원됩니다. 2.1.154–2.1.174에서도 Opus 4.8 호출은 가능하지만 이
+추가 잠금은 무시될 수 있으므로 최신 버전을 권장합니다.
+
+Databricks Anthropic Messages 페이지의 모델 목록은 전체 model catalog보다 늦게
+갱신될 수 있습니다. [지원 모델 catalog](https://learn.microsoft.com/azure/databricks/machine-learning/foundation-model-apis/supported-models)와
+실제 smoke test를 함께 사용하세요.
+
 ### 로컬 도구
 
 - macOS/Linux 설치기: `curl`, Python 3
@@ -61,7 +69,7 @@ icacls .env /inheritance:r /grant:r "${env:USERNAME}:(M)"
 ```
 
 ```dotenv
-DATABRICKS_HOST=https://<workspace>.azuredatabricks.net
+DATABRICKS_HOST=https://<workspace-host>
 DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8
 DATABRICKS_TOKEN=<databricks-token>
 ```
@@ -82,14 +90,20 @@ DATABRICKS_MODELS="databricks-claude-opus-4-8 databricks-claude-sonnet-5 databri
 자동 설정이 권장 경로입니다. 기존 Claude Code 설정은 백업한 뒤 필요한 항목만
 병합합니다.
 
-### macOS / Linux
+### 설정 범위 선택
+
+기본 실행은 사용자 전역 `~/.claude/settings.json`을 수정하므로 모든 프로젝트의
+Claude Code가 Databricks를 사용합니다. 이 동작을 원하는 경우 다음 기본 명령을
+사용합니다.
+
+macOS/Linux:
 
 ```bash
 unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY
 scripts/setup_claude_code_databricks.sh
 ```
 
-### Windows PowerShell
+Windows PowerShell:
 
 ```powershell
 Remove-Item Env:ANTHROPIC_AUTH_TOKEN, Env:ANTHROPIC_API_KEY `
@@ -98,13 +112,41 @@ powershell -ExecutionPolicy Bypass `
   -File .\scripts\setup_claude_code_databricks.ps1
 ```
 
+기존 Anthropic Pro/Max/API 연결과 병행하려면 위 기본 명령 대신 리포 로컬
+`settings.local.json`을 선택하세요. 이 리포는 해당 파일과 timestamp 백업을 Git에서
+제외합니다.
+
+macOS/Linux:
+
+```bash
+mkdir -p .claude
+unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY
+CLAUDE_SETTINGS="$PWD/.claude/settings.local.json" \
+  scripts/setup_claude_code_databricks.sh
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item Env:ANTHROPIC_AUTH_TOKEN, Env:ANTHROPIC_API_KEY `
+  -ErrorAction SilentlyContinue
+$LocalSettings = Join-Path (Get-Location) '.claude\settings.local.json'
+powershell -ExecutionPolicy Bypass `
+  -File .\scripts\setup_claude_code_databricks.ps1 `
+  -ClaudeSettings $LocalSettings
+```
+
+팀 전체와 공유할 프로젝트 설정은 `.claude/settings.json`을 사용할 수 있지만,
+machine-specific helper 경로와 workspace URL이 포함되므로 의도적으로 관리할 때만
+커밋하세요. Token 자체는 어느 설정 파일에도 저장하지 않습니다.
+
 스크립트가 수행하는 작업:
 
 1. `.env` 또는 환경변수에서 workspace, token, model 로드
 2. Claude Code와 충돌하는 기존 Anthropic credential 확인
 3. 네이티브 Anthropic API와 모델 후보 smoke test
 4. Token을 사용자 전용 파일에 저장하고 `apiKeyHelper` 생성
-5. `~/.claude/settings.json`에 Databricks URL과 모델 프리셋 병합
+5. 선택한 settings 파일(기본 `~/.claude/settings.json`)에 URL과 모델 프리셋 병합
 6. `/model`을 검증된 Databricks 모델로 제한
 7. 미지원 beta와 hosted `WebSearch` 비활성화
 8. 이전 LiteLLM 자동 시작 서비스가 있으면 중지
@@ -128,7 +170,7 @@ powershell -ExecutionPolicy Bypass `
   ],
   "enforceAvailableModels": true,
   "env": {
-    "ANTHROPIC_BASE_URL": "https://<workspace>/serving-endpoints/anthropic",
+    "ANTHROPIC_BASE_URL": "https://<workspace-host>/serving-endpoints/anthropic",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-4-8",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "databricks-claude-sonnet-5",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-4-5",
@@ -140,9 +182,10 @@ powershell -ExecutionPolicy Bypass `
 
 설치기는 `ANTHROPIC_MODEL`을 설정하지 않습니다. Opus/Sonnet/Haiku 프리셋이
 Databricks 모델로 해석되도록 `ANTHROPIC_DEFAULT_*_MODEL`만 설정합니다.
-사용자 `settings.json`의 `availableModels`와 `enforceAvailableModels`는 현재 사용자의
+선택한 settings 파일의 `availableModels`와 `enforceAvailableModels`는 현재 사용자의
 모델 선택을 제한합니다. 조직 전체에 강제하려면 동일한 두 키를 최고 우선순위의
 managed/policy settings에 배포해야 하며, managed 설정이 사용자 목록보다 우선합니다.
+`Default` 옵션 잠금은 Claude Code 2.1.175 이상에서만 적용됩니다.
 
 ## 3. 자동 설정 결과 확인
 
@@ -163,14 +206,16 @@ claude
 macOS/Linux에서 base URL 확인:
 
 ```bash
+SETTINGS_PATH="$HOME/.claude/settings.json" # 로컬 범위는 .claude/settings.local.json
 python3 -c \
-  'import json, pathlib; p = pathlib.Path.home() / ".claude/settings.json"; print(json.loads(p.read_text())["env"]["ANTHROPIC_BASE_URL"])'
+  'import json, pathlib, sys; p = pathlib.Path(sys.argv[1]); print(json.loads(p.read_text())["env"]["ANTHROPIC_BASE_URL"])' \
+  "$SETTINGS_PATH"
 ```
 
 기대값:
 
 ```text
-https://<workspace>.azuredatabricks.net/serving-endpoints/anthropic
+https://<workspace-host>/serving-endpoints/anthropic
 ```
 
 ## 4. 스크립트 없이 수동 설정
@@ -332,14 +377,19 @@ claude --model databricks-claude-sonnet-5
 | `tool type 'web_search_*' is not supported` | `permissions.deny`에 bare `WebSearch` 추가 |
 | `/model` 선택 후 모델을 찾지 못함 | Databricks의 실제 endpoint ID와 리전 가용성 확인 |
 | `403 ... rate limit of 0` | 모델·리전, cross-Geo, rate limit, 권한, 계정 용량 확인 |
+| HTTP 200이지만 `type: "message"`가 없음 | `/serving-endpoints/anthropic/v1/messages` 경로와 Claude 모델 ID를 확인하고 응답 body가 gateway에서 변형되지 않았는지 확인 |
 | 이전 포트 4000 프로세스가 남음 | 더 이상 필요 없는 LiteLLM 프로세스의 PID를 확인한 뒤 해당 PID만 종료 |
 
 운영 인증, 모델 fallback, custom base URL 제한, 두 AI Gateway, LiteLLM 마이그레이션은
 [Claude Code 상세 참고](claude-code-databricks-reference.md)를 확인하세요.
+설정 복원과 credential 제거는
+[Databricks 직접 연결 제거](claude-code-databricks-reference.md#10-databricks-직접-연결-제거)를
+따르세요.
 
 ## 공식 문서
 
 - [Azure Databricks Anthropic Messages API](https://learn.microsoft.com/azure/databricks/machine-learning/model-serving/query-anthropic-messages)
 - [Databricks-hosted foundation models](https://learn.microsoft.com/azure/databricks/machine-learning/foundation-model-apis/supported-models)
+- [Claude Code settings scopes](https://code.claude.com/docs/en/settings#configuration-scopes)
 - [Claude Code model configuration](https://code.claude.com/docs/en/model-config)
 - [Claude Code environment variables](https://code.claude.com/docs/en/env-vars)

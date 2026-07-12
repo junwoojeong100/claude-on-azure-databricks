@@ -6,7 +6,7 @@
 .DESCRIPTION
     Azure Databricks exposes an Anthropic-compatible endpoint at:
 
-        https://<workspace>/serving-endpoints/anthropic/v1/messages
+        https://<workspace-host>/serving-endpoints/anthropic/v1/messages
 
     Claude Code can use this endpoint directly. No LiteLLM proxy, Python
     environment, local port, or auto-start service is required.
@@ -21,7 +21,7 @@
     .\scripts\setup_claude_code_databricks.ps1
 
 .EXAMPLE
-    $env:DATABRICKS_HOST = 'https://adb-xxx.azuredatabricks.net'
+    $env:DATABRICKS_HOST = 'https://adb-1234567890123456.7.azuredatabricks.net'
     $env:DATABRICKS_TOKEN = 'dapi...'
     $env:DATABRICKS_SERVING_ENDPOINT = 'databricks-claude-opus-4-8'
     .\scripts\setup_claude_code_databricks.ps1
@@ -95,8 +95,12 @@ function Test-NativeModel {
             } `
             -ContentType 'application/json' `
             -Body $body
-        $script:LastNativeError = $null
-        return ($response.type -eq 'message')
+        if ($response.type -eq 'message') {
+            $script:LastNativeError = $null
+            return $true
+        }
+        $script:LastNativeError = "HTTP 200 response did not contain type='message'"
+        return $false
     }
     catch {
         $script:LastNativeError = $_.ErrorDetails.Message
@@ -219,8 +223,16 @@ if ($env:ANTHROPIC_AUTH_TOKEN -or $env:ANTHROPIC_API_KEY) {
 }
 $ClaudeVersion = (& claude --version 2>$null | Select-Object -First 1)
 Write-Ok "Claude Code: $ClaudeVersion"
-if ($ClaudeVersion -match '(\d+\.\d+\.\d+)' -and
-    [version]$Matches[1] -lt [version]'2.1.197') {
+$ParsedClaudeVersion = if ($ClaudeVersion -match '(\d+\.\d+\.\d+)') {
+    [version]$Matches[1]
+}
+else {
+    $null
+}
+if ($ParsedClaudeVersion -and $ParsedClaudeVersion -lt [version]'2.1.175') {
+    Write-Note 'Claude Code 2.1.175+ is required for enforceAvailableModels to lock the Default option'
+}
+if ($ParsedClaudeVersion -and $ParsedClaudeVersion -lt [version]'2.1.197') {
     Write-Note 'Claude Code 2.1.197+ is recommended for the default Sonnet 5 mapping'
 }
 
@@ -236,7 +248,8 @@ if ($FastEndpoint -ne $Endpoint) {
         Write-Ok "Haiku/lightweight background model '$FastEndpoint' returned an Anthropic message"
     }
     else {
-        Write-Note "Haiku/lightweight background model '$FastEndpoint' failed; using '$Endpoint'"
+        $FailureDetail = if ($LastNativeError) { ": $LastNativeError" } else { '' }
+        Write-Note "Haiku/lightweight background model '$FastEndpoint' failed$FailureDetail; using '$Endpoint'"
         $FastEndpoint = $Endpoint
     }
 }
@@ -252,7 +265,8 @@ foreach ($model in ($Models -split '[,\s]+' | Where-Object { $_ -and $_.Trim() }
         $ValidatedModels += $model
     }
     else {
-        Write-Note "selectable model '$model' failed validation; using a validated family fallback"
+        $FailureDetail = if ($LastNativeError) { ": $LastNativeError" } else { '' }
+        Write-Note "selectable model '$model' failed validation$FailureDetail; using a validated family fallback"
     }
 }
 $ValidatedModels = @($ValidatedModels | Select-Object -Unique)

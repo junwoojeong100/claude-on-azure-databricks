@@ -6,12 +6,14 @@ Databricks의 Claude 모델을 호출합니다.
 ```text
 Agent Framework
   └─ OpenAI Chat Completions
-      └─ https://<workspace>/serving-endpoints/chat/completions
+      └─ https://<workspace-host>/serving-endpoints/chat/completions
           └─ model: databricks-claude-opus-4-8
 ```
 
 Databricks의 이 경로는 Chat Completions API이므로, Agent Framework에서 Responses
 클라이언트가 아닌 `OpenAIChatCompletionClient`를 사용합니다.
+
+> 최종 검증: 2026-07-12, `agent-framework-openai` 1.0.1.
 
 ## 사전 준비
 
@@ -19,7 +21,7 @@ Databricks의 이 경로는 Chat Completions API이므로, Agent Framework에서
 `.env`에 다음 값이 있어야 합니다.
 
 ```dotenv
-DATABRICKS_HOST=https://<workspace>.azuredatabricks.net
+DATABRICKS_HOST=https://<workspace-host>
 DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8
 DATABRICKS_TOKEN=<databricks-token>
 ```
@@ -41,6 +43,13 @@ py -3 -m venv .venv
 ```
 
 Python 3.10 이상이 필요합니다.
+`requirements.txt`의 하한은 `agent-framework-openai>=1.0.0`이며 이 가이드는
+1.0.1로 검증했습니다. 설치된 버전은 다음처럼 확인할 수 있습니다.
+
+```bash
+.venv/bin/python -c \
+  'import importlib.metadata as m; print(m.version("agent-framework-openai"))'
+```
 
 ## 실행
 
