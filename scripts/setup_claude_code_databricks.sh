@@ -347,7 +347,7 @@ ok "credential stored in $STATE_DIR/.env (0600)"
 log "5/6 Configure Claude Code"
 mkdir -p "$(dirname "$CLAUDE_SETTINGS")"
 if [ -f "$CLAUDE_SETTINGS" ]; then
-  cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS.bak.$(date +%Y%m%d%H%M%S)"
+  cp "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS.bak.$(date +%Y%m%d%H%M%S)-$$"
   ok "backed up existing Claude settings"
 fi
 

@@ -78,6 +78,15 @@ function Test-JsonObject {
     return $null -ne $Value -and $Value.GetType() -eq [System.Management.Automation.PSCustomObject]
 }
 
+function Get-SettingsBackupPath {
+    param(
+        [Parameter(Mandatory)] [string]$Path,
+        [datetime]$Timestamp = (Get-Date),
+        [int]$ProcessId = $PID
+    )
+    return "$Path.bak.$($Timestamp.ToString('yyyyMMddHHmmss'))-$ProcessId"
+}
+
 function Test-AnthropicMessageResponse {
     param([AllowNull()] $Response)
     return (
@@ -420,7 +429,8 @@ if ($SettingsDir) {
 }
 
 if (Test-Path $ClaudeSettings) {
-    Copy-Item $ClaudeSettings "$ClaudeSettings.bak.$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $SettingsBackup = Get-SettingsBackupPath -Path $ClaudeSettings
+    Copy-Item $ClaudeSettings $SettingsBackup
     Write-Ok 'backed up existing Claude settings'
     try {
         $Settings = Get-Content $ClaudeSettings -Raw | ConvertFrom-Json

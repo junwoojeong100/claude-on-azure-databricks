@@ -14,7 +14,11 @@ if ($ParseErrors.Count) {
     throw "PowerShell setup script has $($ParseErrors.Count) parse error(s)."
 }
 
-foreach ($FunctionName in 'Test-JsonObject', 'Test-AnthropicMessageResponse') {
+foreach ($FunctionName in @(
+    'Test-JsonObject',
+    'Get-SettingsBackupPath',
+    'Test-AnthropicMessageResponse'
+)) {
     $FunctionAst = $Ast.Find(
         {
             param($Node)
@@ -27,6 +31,18 @@ foreach ($FunctionName in 'Test-JsonObject', 'Test-AnthropicMessageResponse') {
         throw "Could not find function '$FunctionName'."
     }
     . ([scriptblock]::Create($FunctionAst.Extent.Text))
+}
+
+$FixedTimestamp = [datetime]'2026-07-13T00:00:00'
+$FirstBackup = Get-SettingsBackupPath `
+    -Path 'settings.json' -Timestamp $FixedTimestamp -ProcessId 100
+$SecondBackup = Get-SettingsBackupPath `
+    -Path 'settings.json' -Timestamp $FixedTimestamp -ProcessId 200
+if ($FirstBackup -eq $SecondBackup) {
+    throw 'Settings backup paths must remain unique within the same second.'
+}
+if ($FirstBackup -ne 'settings.json.bak.20260713000000-100') {
+    throw "Unexpected settings backup path: $FirstBackup"
 }
 
 $Message = [pscustomobject]@{ type = 'message' }
