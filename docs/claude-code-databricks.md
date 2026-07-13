@@ -214,7 +214,13 @@ claude
 
 실행 중 `/model`을 열면 설치기가 검증한 Databricks 모델을 선택할 수 있습니다.
 
-## 4. 스크립트 없이 한 번만 테스트
+## 4. 스크립트 없이 수동 설정
+
+Credential helper 생성, settings 범위 선택, JSON 병합, 충돌 제거를 직접 수행하려면
+[Claude Code와 Azure Databricks 수동 연결](claude-code-databricks-manual.md)을
+따르세요. 자동 설치기가 무엇을 구성하는지 단계별로 확인할 수 있습니다.
+
+### 현재 셸에서 한 번만 테스트
 
 영구 설정 전에 현재 셸에서 연결만 확인하려면 다음 값을 직접 지정합니다.
 
@@ -242,8 +248,8 @@ unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN DATABRICKS_TOKEN
 unset ANTHROPIC_DEFAULT_OPUS_MODEL CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS
 ```
 
-Windows 수동 설정과 반복 사용을 위한 helper 구성은
-[Claude Code 상세 참고](claude-code-databricks-reference.md)를 확인하세요.
+Windows를 포함한 영구 수동 설정은
+[수동 연결 가이드](claude-code-databricks-manual.md)를 확인하세요.
 
 ## 5. 모델 전환
 

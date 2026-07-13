@@ -1,8 +1,10 @@
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from urllib.parse import unquote
@@ -94,6 +96,63 @@ class DocumentationTests(unittest.TestCase):
                 linked_guides.add(linked_path)
 
         self.assertEqual(linked_guides, set(docs_dir.glob("*.md")))
+
+    def test_manual_guide_covers_required_configuration(self) -> None:
+        manual_path = ROOT / "docs" / "claude-code-databricks-manual.md"
+        manual_guide = manual_path.read_text(encoding="utf-8")
+
+        for required_text in (
+            "apiKeyHelper",
+            "ANTHROPIC_BASE_URL",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
+            "WebSearch",
+            "### macOS/Linux",
+            "### Windows PowerShell",
+        ):
+            self.assertIn(required_text, manual_guide)
+
+    @unittest.skipUnless(shutil.which("bash"), "bash is required")
+    def test_manual_bash_helper_returns_token(self) -> None:
+        manual_path = ROOT / "docs" / "claude-code-databricks-manual.md"
+        helper_setup = next(
+            code
+            for language, code, _ in fenced_blocks(manual_path)
+            if language == "bash" and "cat >" in code and "get-token.sh" in code
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            home = temp_path / "home"
+            home.mkdir()
+            (temp_path / ".env").write_text(
+                "DATABRICKS_TOKEN=test-manual-token\n",
+                encoding="utf-8",
+            )
+            environment = os.environ.copy()
+            environment["HOME"] = str(home)
+            setup = subprocess.run(
+                ["bash", "-e"],
+                input=helper_setup,
+                cwd=temp_path,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+            self.assertEqual(setup.returncode, 0, setup.stderr)
+
+            helper = home / ".claude-databricks" / "get-token.sh"
+            result = subprocess.run(
+                [str(helper)],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "test-manual-token")
 
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}

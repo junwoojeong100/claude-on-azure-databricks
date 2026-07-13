@@ -119,6 +119,13 @@ DATABRICKS_TOKEN=<databricks-token>
 
 ### Claude Code 설정
 
+| 방식 | 사용 시점 |
+| --- | --- |
+| 자동 설정(권장) | 기존 settings를 백업·병합하고 모델/API를 함께 검증 |
+| 수동 설정 | 각 설정의 의미를 확인하거나 보안 정책상 스크립트를 실행할 수 없을 때 |
+
+#### 자동 설정
+
 macOS/Linux:
 
 ```bash
@@ -131,6 +138,12 @@ Windows PowerShell:
 powershell -ExecutionPolicy Bypass `
   -File .\scripts\setup_claude_code_databricks.ps1
 ```
+
+#### 수동 설정
+
+스크립트 없이 각 설정을 직접 구성하려면
+[Claude Code와 Azure Databricks 수동 연결](docs/claude-code-databricks-manual.md)을
+따르세요.
 
 기본 설정 대상은 사용자 전역 `~/.claude/settings.json`입니다. 기존 Anthropic,
 Foundry, Bedrock 또는 Vertex 설정과 프로젝트별로 병행해야 한다면
