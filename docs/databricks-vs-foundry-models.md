@@ -3,8 +3,8 @@
 > 최종 검증: 2026-07-13. 모델 가용성, 쿼터, 가격, Preview 상태는 자주 바뀌므로
 > 배포 전 [공식 문서](#공식-참고-문서)를 다시 확인하세요.
 >
-> 이 문서는 운영 선택을 위한 심화 비교입니다. 실습 순서는 [README](../README.md),
-> 환경 준비는 [Azure Databricks 설정 가이드](azure-databricks-setup.md),
+> 이 문서는 운영 선택을 위한 심화 비교입니다. 시작 경로는 [README](../README.md),
+> 새 workspace 생성은 [Azure Databricks workspace 생성 가이드](azure-databricks-setup.md),
 > Claude Code 연결은 [직접 연결 가이드](claude-code-databricks.md)를 참고하세요.
 
 ## TL;DR

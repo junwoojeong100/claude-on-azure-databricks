@@ -67,6 +67,18 @@ def fenced_blocks(path: Path) -> list[tuple[str, str, int]]:
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_readme_separates_workspace_and_claude_code_paths(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        workspace_heading = "## 1. Azure Databricks workspace 만들기"
+        claude_code_heading = "## 2. 기존 workspace에 Claude Code 연결하기"
+
+        self.assertIn(workspace_heading, readme)
+        self.assertIn(claude_code_heading, readme)
+        self.assertLess(
+            readme.index(workspace_heading), readme.index(claude_code_heading)
+        )
+        self.assertNotIn("## 가장 빠른 전체 실습", readme)
+
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}
         checked = 0

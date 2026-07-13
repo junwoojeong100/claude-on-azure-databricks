@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# End-to-end setup for the Databricks Claude agent sample.
+# Azure Databricks workspace bootstrap with Claude API validation.
 #
 # Automates from an empty subscription and reuses a valid repo .env PAT on reruns:
 #   1. Resource group
@@ -12,7 +12,7 @@
 #   6. (optional) a full run of src/agent_sample.py against a working endpoint
 #
 # Requirements: az with the Databricks extension (logged in: `az login`), curl,
-# and a project virtualenv at .venv created with Python 3.10 or newer.
+# and Python 3.10 or newer. RUN_AGENT=1 also requires the project .venv.
 #
 # Usage:
 #   scripts/setup_databricks_claude.sh
@@ -41,7 +41,8 @@ DATABRICKS_MODELS="${DATABRICKS_MODELS:-}"                   # optional Claude C
 FALLBACK="${FALLBACK:-databricks-meta-llama-3-3-70b-instruct}"  # proves pipeline
 PAT_LIFETIME_SECONDS="${PAT_LIFETIME_SECONDS:-7776000}"    # 90 days
 ROTATE_PAT="${ROTATE_PAT:-0}"                              # 1 creates a new PAT
-RUN_AGENT="${RUN_AGENT:-1}"                                 # run the sample at the end
+RUN_AGENT="${RUN_AGENT:-0}"                                 # 1 runs the optional MAF sample
+PYTHON="${PYTHON:-python3}"                                 # setup-time Python
 
 # Microsoft Entra application ID for the AzureDatabricks login service (fixed value).
 DBX_AAD_RESOURCE="2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
@@ -49,7 +50,7 @@ DBX_AAD_RESOURCE="2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
-PY="$ROOT/.venv/bin/python"
+AGENT_PY="$ROOT/.venv/bin/python"
 
 c_reset=$'\033[0m'; c_blue=$'\033[1;34m'; c_green=$'\033[1;32m'
 c_yellow=$'\033[1;33m'; c_red=$'\033[1;31m'
@@ -116,13 +117,19 @@ token_validation_code() {
 log "0/6 Preflight"
 command -v az >/dev/null || die "az CLI not found. Install Azure CLI and run 'az login'."
 command -v curl >/dev/null || die "curl is required."
+command -v "$PYTHON" >/dev/null || die "Python not found: $PYTHON"
+PY="$(command -v "$PYTHON")"
 az account show >/dev/null 2>&1 || die "Not logged in. Run 'az login' first."
 az extension show --name databricks >/dev/null 2>&1 ||
   die "Azure CLI Databricks extension not found. Run: az extension add --name databricks --upgrade"
-[ -x "$PY" ] ||
-  die "venv not found at .venv. Follow docs/azure-databricks-setup.md with Python 3.10+."
 "$PY" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' ||
-  die "Python 3.10 or newer is required in .venv."
+  die "Python 3.10 or newer is required."
+if [ "$RUN_AGENT" = "1" ]; then
+  [ -x "$AGENT_PY" ] ||
+    die "RUN_AGENT=1 requires .venv. Follow docs/agent-framework.md."
+  "$AGENT_PY" -c 'import agent_framework.openai, dotenv, httpx, openai' ||
+    die "RUN_AGENT=1 requires dependencies from requirements.txt."
+fi
 SUB_NAME="$(az account show --query name -o tsv)"
 ok "az logged in — subscription: $SUB_NAME"
 
@@ -189,7 +196,7 @@ fi
 if [ -z "$TOKEN" ]; then
   TOKEN="$(curl_with_bearer "$(aad_token)" -sS -X POST "$HOST/api/2.0/token/create" \
     -H "Content-Type: application/json" \
-    -d "{\"comment\":\"agent-sample-setup\",\"lifetime_seconds\":$PAT_LIFETIME_SECONDS}" \
+    -d "{\"comment\":\"claude-workspace-setup\",\"lifetime_seconds\":$PAT_LIFETIME_SECONDS}" \
     | "$PY" -c "import sys,json; print(json.load(sys.stdin).get('token_value',''))")"
   [ -n "$TOKEN" ] || die "Failed to create a PAT. Ensure token creation is enabled and you have workspace access."
   ok "created a new PAT (ROTATE_PAT=$ROTATE_PAT)"
@@ -309,18 +316,20 @@ cleanup_smoke_files
 trap - EXIT
 
 # ---------------------------------------------------------------------------
-log "6/6 Agent sample run"
+log "6/6 Optional Agent Framework sample"
 if [ "$RUN_AGENT" = "1" ] && [ -n "$WORKING_ENDPOINT" ]; then
   ok "running src/agent_sample.py against '$WORKING_ENDPOINT'"
-  echo "" | DATABRICKS_SERVING_ENDPOINT="$WORKING_ENDPOINT" "$PY" src/agent_sample.py
+  echo "" | DATABRICKS_SERVING_ENDPOINT="$WORKING_ENDPOINT" "$AGENT_PY" src/agent_sample.py
+elif [ "$RUN_AGENT" = "1" ]; then
+  warn "skipped because no working endpoint was found"
 else
-  warn "skipped (RUN_AGENT=$RUN_AGENT, working_endpoint='${WORKING_ENDPOINT:-none}')"
+  ok "skipped (set RUN_AGENT=1 to run the optional sample)"
 fi
 
 echo
 ok "Done. Workspace: $HOST"
 if [ "$WORKING_ENDPOINT" = "$ENDPOINT" ]; then
-  ok "Claude endpoint '$ENDPOINT' is live — run: .venv/bin/python src/agent_sample.py"
+  ok "Claude endpoint '$ENDPOINT' is live; .env is ready for Claude Code or optional samples."
 else
   warn "Claude '$ENDPOINT' is unavailable; review region, cross-Geo, rate limits, permissions, and account capacity."
 fi

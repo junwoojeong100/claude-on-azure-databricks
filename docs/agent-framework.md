@@ -1,7 +1,8 @@
 # Microsoft Agent Framework 실습
 
 이 실습은 Microsoft Agent Framework의 Python `OpenAIChatCompletionClient`로 Azure
-Databricks의 Claude 모델을 호출합니다.
+Databricks의 Claude 모델을 호출합니다. Workspace 생성과 Claude Code 연결에 종속시키지
+않고, OpenAI 호환 API를 확인하는 별도 경로로 유지합니다.
 
 ```text
 Agent Framework
@@ -17,8 +18,9 @@ Databricks의 이 경로는 Chat Completions API이므로, Agent Framework에서
 
 ## 사전 준비
 
-[Azure Databricks 환경 설정](azure-databricks-setup.md)을 완료하고 프로젝트 루트의
-`.env`에 다음 값이 있어야 합니다.
+[Azure Databricks workspace 생성 가이드](azure-databricks-setup.md)의 자동 스크립트를
+완료했거나, 기존 workspace 정보를 사용해 프로젝트 루트의 `.env`에 다음 값을
+준비해야 합니다.
 
 ```dotenv
 DATABRICKS_HOST=https://<workspace-host>
@@ -140,4 +142,6 @@ total이 일치하는 정상 응답은 그대로 사용합니다.
 | `403 ... rate limit of 0` | [환경 설정 가이드의 진단 순서](azure-databricks-setup.md#자주-발생하는-문제) 확인 |
 | 첫 턴은 성공하고 두 번째 턴 실패 | `name` 필드 제거 훅이 빠지지 않았는지 확인 |
 
-다음 단계: [Claude Code를 Azure Databricks Claude에 연결](claude-code-databricks.md)
+Claude Code 연결은 이 실습과 독립적입니다.
+[기존 workspace에 Claude Code 연결하기](claude-code-databricks.md)를 바로 실행할 수
+있습니다.
