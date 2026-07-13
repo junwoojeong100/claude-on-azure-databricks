@@ -39,7 +39,7 @@ az extension add --name databricks --upgrade
 az login
 az account set --subscription "<name-or-id>"
 
-RG=my-rg LOCATION=koreacentral WORKSPACE=my-workspace \
+RG=my-rg LOCATION=eastus2 WORKSPACE=my-workspace \
   scripts/setup_databricks_claude.sh
 ```
 
@@ -68,7 +68,7 @@ Windows에서 workspace만 생성하거나 각 단계를 직접 제어하려면
 | --- | --- |
 | Workspace URL | `https://adb-<workspace-id>.<number>.azuredatabricks.net` |
 | 호출 가능한 Claude 모델 ID | `databricks-claude-opus-4-8`, `databricks-claude-sonnet-5`, `databricks-claude-haiku-4-5` |
-| 모델 호출 credential | 기본 시작은 PAT, 선택적으로 OAuth U2M, 운영 자동화는 OAuth M2M |
+| 모델 호출 credential | 빠른 검증은 PAT(legacy), 사용자 장기 사용은 OAuth U2M, 운영 자동화는 OAuth M2M |
 
 - 사전 구성된 Databricks-hosted pay-per-token 모델은 workspace 접근 권한과 유효한
   token이 필요하며, Foundation Model Unity Catalog 권한 기능을 사용하면 대상
@@ -102,8 +102,9 @@ Claude Code가 이 파일을 직접 읽어 `/model` 선택기의 Opus/Sonnet/Hai
 구성하므로 별도 자동 스크립트는 필요하지 않습니다.
 
 가장 쉬운 시작 경로는 PAT입니다. 정적 PAT 저장을 피하려면
-[OAuth U2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-u2m)을
-선택할 수 있습니다. 운영 자동화는
+[OAuth U2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-u2m)과
+token 갱신 방식이 필요합니다. OAuth U2M access token은 1시간 동안 유효하므로 단순히
+settings 파일에 복사하는 것만으로는 장기 사용에 적합하지 않습니다. 운영 자동화는
 [OAuth M2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m)을
 사용하세요.
 
@@ -135,8 +136,9 @@ claude
 ## 보안과 비용
 
 - `.env`나 PAT가 포함된 settings 파일을 Git에 커밋하지 마세요.
-- PAT는 가장 쉬운 로컬 시작 방법입니다. 보안 요구가 높으면 OAuth U2M을 선택하고, 운영
-  자동화는 서비스 주체 OAuth M2M을 사용하세요.
+- PAT는 가장 쉬운 로컬 검증 방법이지만 Databricks의 legacy 인증입니다. 사용자 장기
+  사용은 자동 갱신을 포함한 OAuth U2M, 운영 자동화는 서비스 주체 OAuth M2M을
+  사용하세요.
 - Workspace와 pay-per-token 모델 사용에는 비용이 발생합니다. 실습용 리소스는 사용 후
   [workspace 생성 가이드의 정리 절차](docs/azure-databricks-setup.md#정리)로 삭제하세요.
 

@@ -111,6 +111,9 @@ class DocumentationTests(unittest.TestCase):
             "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
             "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
             "WebSearch",
+            "availableModels",
+            "enforceAvailableModels",
+            "apiKeyHelper",
             "## 4. 모델 선택기",
         ):
             self.assertIn(required_text, guide)

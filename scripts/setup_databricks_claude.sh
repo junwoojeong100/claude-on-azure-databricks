@@ -16,7 +16,7 @@
 #
 # Usage:
 #   scripts/setup_databricks_claude.sh
-#   RG=my-rg LOCATION=koreacentral WORKSPACE=my-ws scripts/setup_databricks_claude.sh
+#   RG=my-rg LOCATION=eastus2 WORKSPACE=my-ws scripts/setup_databricks_claude.sh
 #
 # Configurable via environment variables (defaults shown):
 RG="${RG:-rg-databricks-claude}"
@@ -95,7 +95,7 @@ load_existing_config() {
 token_validation_code() {
   local token="$1" code
   code="$(curl_with_bearer "$token" -sS -o /dev/null -w "%{http_code}" \
-    "$HOST/api/2.0/preview/scim/v2/Me" 2>/dev/null || true)"
+    "$HOST/api/2.0/serving-endpoints" 2>/dev/null || true)"
   printf "%s" "${code:-000}"
 }
 
@@ -239,6 +239,7 @@ smoke_anthropic() {
 
 log "5/6 Model connection test"
 WORKING_ENDPOINT=""
+CLAUDE_CODE_READY=0
 CODE="$(smoke "$ENDPOINT")"
 if [ "$CODE" = "200" ]; then
   REPLY="$("$PY" -c "import json,sys;print(json.load(open(sys.argv[1]))['choices'][0]['message']['content'])" "$SMOKE_FILE")"
@@ -249,6 +250,7 @@ if [ "$CODE" = "200" ]; then
     NATIVE_TYPE="$("$PY" -c "import json,sys;print(json.load(open(sys.argv[1])).get('type',''))" "$ANTHROPIC_SMOKE_FILE" 2>/dev/null || true)"
     if [ "$NATIVE_TYPE" = "message" ]; then
       ok "native Anthropic route responded with type='message'"
+      CLAUDE_CODE_READY=1
     else
       warn "native Anthropic route returned HTTP 200 without type='message'"
     fi
@@ -295,7 +297,12 @@ fi
 echo
 ok "Done. Workspace: $HOST"
 if [ "$WORKING_ENDPOINT" = "$ENDPOINT" ]; then
-  ok "Claude endpoint '$ENDPOINT' is live; .env is ready for Claude Code or optional samples."
+  ok "OpenAI-compatible route for '$ENDPOINT' is live; .env is ready for optional samples."
+  if [ "$CLAUDE_CODE_READY" = "1" ]; then
+    ok "Native Anthropic route is live; follow docs/claude-code-databricks.md to configure Claude Code."
+  else
+    warn "Native Anthropic route is not ready; Claude Code is not ready for this model."
+  fi
 else
   warn "Claude '$ENDPOINT' is unavailable; review region, cross-Geo, rate limits, permissions, and account capacity."
 fi
