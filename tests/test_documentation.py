@@ -108,6 +108,7 @@ class DocumentationTests(unittest.TestCase):
             "ANTHROPIC_DEFAULT_HAIKU_MODEL",
             "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
             "WebSearch",
+            "모델 선택기 동작",
         ):
             self.assertIn(required_text, manual_guide)
 

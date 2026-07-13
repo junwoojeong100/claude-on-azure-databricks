@@ -101,7 +101,30 @@ claude
 
 `/model`에서 Opus/Sonnet/Haiku와 Databricks 모델 ID를 확인할 수 있습니다.
 
-## 3. Sonnet과 Haiku를 따로 사용할 때
+## 3. 모델 선택기 동작
+
+Claude Code는 시작할 때 `settings.local.json`을 읽어 `/model` 선택기를 구성합니다.
+자동 스크립트는 필요하지 않습니다.
+
+| 설정 | 역할 |
+| --- | --- |
+| `availableModels` | `/model`에 표시할 alias와 모델 ID |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | `opus` 선택 시 실제 요청할 Databricks 모델 |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | `sonnet` 선택 시 실제 요청할 Databricks 모델 |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `haiku` 선택 시 실제 요청할 Databricks 모델 |
+| `enforceAvailableModels` | 설정한 모델 목록 밖의 선택을 제한 |
+
+앞의 최소 설정에서는 다음 항목이 표시됩니다.
+
+- `opus`
+- `sonnet`
+- `haiku`
+- `databricks-claude-opus-4-8`
+
+단, 처음에는 세 alias가 모두 `databricks-claude-opus-4-8`로 연결됩니다. 선택기에는
+Opus/Sonnet/Haiku가 각각 표시되지만 실제 호출 모델은 동일합니다.
+
+## 4. Sonnet과 Haiku를 따로 사용할 때
 
 두 모델도 실제 호출에 성공한 경우에만 다음 값을 변경합니다.
 
@@ -126,7 +149,7 @@ claude
 이 JSON은 변경할 부분만 보여줍니다. 기존 URL, PAT, beta와 permission 설정은
 유지하세요.
 
-## 4. 자주 발생하는 문제
+## 5. 자주 발생하는 문제
 
 | 증상 | 확인할 항목 |
 | --- | --- |

@@ -102,6 +102,8 @@ New-Item -ItemType Directory -Force -Path .claude | Out-Null
 ```
 
 `.claude/settings.local.json`에 workspace URL, PAT, 모델 ID를 입력합니다.
+Claude Code가 이 파일을 직접 읽어 `/model` 선택기의 Opus/Sonnet/Haiku mapping까지
+구성하므로 별도 자동 스크립트는 필요하지 않습니다.
 
 가장 쉬운 시작 경로는 PAT입니다. 정적 PAT 저장을 피하려면
 [OAuth U2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-u2m)을

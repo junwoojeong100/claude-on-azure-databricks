@@ -60,6 +60,10 @@ Opus 4.8은 2.1.154 이상, Sonnet 5는 2.1.197 이상이 필요합니다.
 - `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1`
 - `permissions.deny`의 `WebSearch`
 
+`availableModels`와 `ANTHROPIC_DEFAULT_*_MODEL` 값만으로 `/model` 선택기의
+Opus/Sonnet/Haiku 항목과 실제 Databricks 모델 mapping이 구성됩니다. 자동 스크립트는
+필요하지 않습니다.
+
 ## 3. 연결 확인
 
 ```bash
