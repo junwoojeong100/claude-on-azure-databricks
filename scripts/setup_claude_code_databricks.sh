@@ -260,7 +260,7 @@ ok "default model: $ENDPOINT   Haiku/lightweight background: $FAST_ENDPOINT"
 CLAUDE_VERSION="$(claude --version 2>/dev/null | head -1)"
 ok "Claude Code: $CLAUDE_VERSION"
 if ! "$PYTHON" -c 'import re,sys; m=re.search(r"\d+(?:\.\d+){2}", sys.argv[1]); raise SystemExit(0 if m and tuple(map(int, m.group().split("."))) >= (2, 1, 175) else 1)' "$CLAUDE_VERSION"; then
-  warn "Claude Code 2.1.175+ is required for enforceAvailableModels to lock the Default option"
+  warn "Claude Code 2.1.175+ is required for enforceAvailableModels support"
 fi
 if ! "$PYTHON" -c 'import re,sys; m=re.search(r"\d+(?:\.\d+){2}", sys.argv[1]); raise SystemExit(0 if m and tuple(map(int, m.group().split("."))) >= (2, 1, 197) else 1)' "$CLAUDE_VERSION"; then
   warn "Claude Code 2.1.197+ is recommended for the default Sonnet 5 mapping"

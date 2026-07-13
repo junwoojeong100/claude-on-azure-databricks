@@ -46,7 +46,7 @@ RG=my-rg LOCATION=koreacentral WORKSPACE=my-workspace \
 스크립트는 다음 작업을 수행합니다.
 
 1. 리소스 그룹과 Azure Databricks workspace 생성 또는 재사용
-2. 로컬 테스트용 PAT 생성과 `.env` 작성
+2. 빠른 로컬 검증용 PAT(legacy) 생성과 `.env` 작성
 3. 설정한 Claude 모델의 OpenAI 호환 API와 네이티브 Anthropic API smoke test
 
 MAF 샘플은 기본적으로 실행하지 않습니다. 필요한 경우에만 명시적으로 실행합니다.
@@ -68,10 +68,13 @@ Windows에서 workspace만 생성하거나 각 단계를 직접 제어하려면
 | --- | --- |
 | Workspace URL | `https://adb-<workspace-id>.<number>.azuredatabricks.net` |
 | 호출 가능한 Claude 모델 ID | `databricks-claude-opus-4-8` |
-| 모델 호출 권한이 있는 token | 로컬은 PAT, 운영은 OAuth M2M 권장 |
+| 모델 호출 권한이 있는 token | 빠른 로컬 검증은 PAT(legacy), 운영은 OAuth M2M 권장 |
 
-일반 serving endpoint ACL에서는 `CAN QUERY`가 필요합니다. Foundation Model Unity
-Catalog 권한 기능을 사용한다면 대상 `system.ai` 모델의 `EXECUTE`도 필요합니다.
+- 사전 구성된 Databricks-hosted pay-per-token 모델은 workspace 접근 권한과 유효한
+  token이 필요하며, Foundation Model Unity Catalog 권한 기능을 사용하면 대상
+  `system.ai` 모델의 `EXECUTE`도 필요합니다.
+- 직접 만든 custom/external serving endpoint를 사용한다면 endpoint ACL의 `CAN QUERY`도
+  필요합니다.
 
 Claude Code는 Databricks의 네이티브 Anthropic Messages API에 직접 연결됩니다.
 
@@ -109,6 +112,10 @@ DATABRICKS_HOST=https://<workspace-host>
 DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8
 DATABRICKS_TOKEN=<databricks-token>
 ```
+
+이 빠른 설정은 PAT를 사용합니다. 운영 OAuth M2M은
+[Claude Code 상세 참고](docs/claude-code-databricks-reference.md#5-운영용-oauth-m2m-helper)의
+별도 helper를 사용하세요.
 
 ### Claude Code 설정
 
@@ -148,20 +155,20 @@ claude
 [Claude Code에서 Azure Databricks Claude 사용하기](docs/claude-code-databricks.md)를
 확인하세요.
 
-## Microsoft Agent Framework 및 참고 자료
+## 추가 가이드
 
 - [Microsoft Agent Framework 샘플](docs/agent-framework.md): OpenAI 호환
   Chat Completions 경로를 확인하는 별도 실습
-- [Claude Code 체크리스트](docs/claude-code-databricks-checklist.md): 배포 전 필수 항목
 - [Claude Code 상세 참고](docs/claude-code-databricks-reference.md): OAuth M2M,
   fallback, gateway, LiteLLM 마이그레이션, 설정 제거
 - [Databricks와 Microsoft Foundry 비교](docs/databricks-vs-foundry-models.md):
-  모델, 거버넌스, 비용 선택 기준
+  설정에는 필요하지 않은 플랫폼 선택 참고 자료
 
 ## 보안과 비용
 
 - `.env`, PAT, 생성된 token helper 파일을 커밋하지 마세요.
-- PAT는 로컬 검증용으로만 사용하고 운영 환경은 서비스 주체 OAuth M2M을 권장합니다.
+- PAT 인증은 legacy입니다. 빠른 로컬 검증 외에는 OAuth를 우선하고, 운영 환경은 서비스
+  주체 OAuth M2M을 권장합니다.
 - Workspace와 pay-per-token 모델 사용에는 비용이 발생합니다. 실습용 리소스는 사용 후
   [workspace 생성 가이드의 정리 절차](docs/azure-databricks-setup.md#정리)로 삭제하세요.
 

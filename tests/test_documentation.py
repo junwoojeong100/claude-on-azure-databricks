@@ -79,6 +79,22 @@ class DocumentationTests(unittest.TestCase):
         )
         self.assertNotIn("## 가장 빠른 전체 실습", readme)
 
+    def test_all_guides_are_linked_from_readme(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        docs_dir = (ROOT / "docs").resolve()
+        linked_guides = set()
+
+        for raw_target in LINK_RE.findall(readme):
+            target = raw_target.strip().split(maxsplit=1)[0].strip("<>")
+            if target.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            file_part = target.partition("#")[0]
+            linked_path = (ROOT / unquote(file_part)).resolve()
+            if linked_path.parent == docs_dir and linked_path.suffix.lower() == ".md":
+                linked_guides.add(linked_path)
+
+        self.assertEqual(linked_guides, set(docs_dir.glob("*.md")))
+
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}
         checked = 0

@@ -9,11 +9,16 @@
 > 리전을 먼저 선택하세요. 이 리포의 스크립트는 custom model serving endpoint를
 > 배포하지 않고, workspace에서 호출 가능한 Databricks-hosted 모델을 검증합니다.
 
+Azure Databricks는 serverless workspace와 Azure 구독의 리소스 그룹에 배포되는
+classic (hybrid) workspace를 제공합니다. 이 리포의 스크립트와 Azure CLI 예시는 Premium
+classic workspace를 만듭니다. 조직이 serverless workspace를 제공한다면 새 리소스를
+만들지 말고 [Claude Code 연결 가이드](claude-code-databricks.md)부터 시작하세요.
+
 ## 준비 사항
 
 | 항목 | 요구사항 |
 | --- | --- |
-| Azure 권한 | 대상 구독의 Contributor 또는 동등한 리소스 생성 권한 |
+| Azure 구독과 권한 | Free Trial이 아닌 구독, Contributor 또는 동등한 리소스 생성 권한 |
 | Azure CLI | 로그인 가능, Databricks 확장 설치 가능 |
 | 리전 | 사용할 Databricks-hosted Claude 모델이 지원되는 Azure 리전 |
 | 로컬 도구 | 자동 스크립트 사용 시 Git, `curl`, Python 3.10 이상 |
@@ -25,7 +30,8 @@
 
 ## 1. 자동 생성: macOS, Linux, WSL
 
-자동 스크립트는 workspace를 만든 뒤 로컬 검증에 필요한 PAT와 `.env`까지 준비합니다.
+자동 스크립트는 workspace를 만든 뒤 빠른 로컬 검증용 PAT(legacy)와 `.env`까지
+준비합니다.
 Microsoft Agent Framework 샘플은 기본적으로 실행하지 않습니다.
 
 ### 로컬 환경 준비
@@ -66,7 +72,7 @@ RG=my-rg LOCATION=koreacentral WORKSPACE=my-workspace \
 스크립트는 다음 작업을 수행합니다.
 
 1. 리소스 그룹과 Premium Databricks workspace 생성 또는 재사용
-2. Azure 로그인으로 로컬 검증용 PAT 생성 또는 기존 유효 PAT 재사용
+2. Azure 로그인으로 로컬 검증용 PAT(legacy) 생성 또는 기존 유효 PAT 재사용
 3. 프로젝트 루트에 권한이 제한된 `.env` 작성
 4. 설정한 Claude 모델의 OpenAI 호환 API와 네이티브 Anthropic API smoke test
 
@@ -185,7 +191,7 @@ RUN_AGENT=1 scripts/setup_databricks_claude.sh
 | Workspace 생성 권한 오류 | 대상 구독과 리소스 그룹의 역할, 현재 `az account show` 결과 |
 | PAT 메뉴가 없거나 생성 실패 | Workspace 접근 권한, PAT 허용 정책, token 최대 수명 |
 | `401` | Workspace URL, token 만료, 다른 workspace의 token인지 확인 |
-| `403 ... rate limit of 0` | 모델·리전, cross-Geo 정책, endpoint/사용자 rate limit, `CAN QUERY`/`EXECUTE`, 계정 용량 |
+| `403 ... rate limit of 0` | 모델·리전, cross-Geo 정책, rate limit, custom endpoint의 `CAN QUERY`, Foundation Model UC의 `EXECUTE`, 계정 용량 |
 | 모델을 찾을 수 없음 | 현재 workspace에서 실제 호출 가능한 모델 ID 확인 |
 | OpenAI 경로는 성공하고 Claude만 실패 | Claude 모델 가용성, 권한, 계정 용량을 우선 확인 |
 
@@ -226,6 +232,6 @@ Claude Code 설정까지 완료했다면 먼저
 ## 공식 문서
 
 - [Create an Azure Databricks workspace](https://learn.microsoft.com/azure/databricks/admin/workspace/)
-- [Azure CLI Databricks workspace commands](https://learn.microsoft.com/cli/azure/databricks/workspace)
+- [Deploy a workspace with the Azure CLI](https://learn.microsoft.com/azure/databricks/admin/workspace/azure-cli)
 - [Databricks-hosted foundation models](https://learn.microsoft.com/azure/databricks/machine-learning/foundation-model-apis/supported-models)
 - [Azure Databricks personal access tokens](https://learn.microsoft.com/azure/databricks/dev-tools/auth/pat#create-personal-access-tokens-for-workspace-users)

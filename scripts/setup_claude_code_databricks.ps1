@@ -285,7 +285,7 @@ else {
     $null
 }
 if ($ParsedClaudeVersion -and $ParsedClaudeVersion -lt [version]'2.1.175') {
-    Write-Note 'Claude Code 2.1.175+ is required for enforceAvailableModels to lock the Default option'
+    Write-Note 'Claude Code 2.1.175+ is required for enforceAvailableModels support'
 }
 if ($ParsedClaudeVersion -and $ParsedClaudeVersion -lt [version]'2.1.197') {
     Write-Note 'Claude Code 2.1.197+ is recommended for the default Sonnet 5 mapping'

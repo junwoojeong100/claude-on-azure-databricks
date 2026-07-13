@@ -25,8 +25,11 @@ Databricks의 이 경로는 Chat Completions API이므로, Agent Framework에서
 ```dotenv
 DATABRICKS_HOST=https://<workspace-host>
 DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8
-DATABRICKS_TOKEN=<databricks-token>
+DATABRICKS_TOKEN=<PAT-or-OAuth-access-token>
 ```
+
+빠른 로컬 실습에는 짧은 수명의 PAT(legacy)를 사용할 수 있습니다. 운영 애플리케이션은
+고정 token을 `.env`에 저장하지 말고 OAuth M2M access token을 동적으로 발급하세요.
 
 ## 설치
 

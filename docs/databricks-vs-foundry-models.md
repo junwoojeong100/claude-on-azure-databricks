@@ -6,6 +6,7 @@
 > 이 문서는 운영 선택을 위한 심화 비교입니다. 시작 경로는 [README](../README.md),
 > 새 workspace 생성은 [Azure Databricks workspace 생성 가이드](azure-databricks-setup.md),
 > Claude Code 연결은 [직접 연결 가이드](claude-code-databricks.md)를 참고하세요.
+> 이 비교 문서는 리포 설정에 필요하지 않으며 플랫폼 선정 단계에서만 사용합니다.
 
 ## TL;DR
 
@@ -29,7 +30,7 @@
 | --- | --- | --- |
 | 모델 카탈로그 | Databricks Foundation Model APIs | Foundry model catalog |
 | Claude 운영 방식 | Databricks-hosted pay-per-token endpoint | Hosted on Azure 또는 Hosted on Anthropic infrastructure |
-| 권한 | Workspace endpoint ACL + Unity Catalog | Azure RBAC + Foundry resource/project 권한 |
+| 권한 | Workspace 접근 + Foundation Model UC 권한 또는 custom endpoint ACL | Azure RBAC + Foundry resource/project 권한 |
 | 정책 적용 | endpoint용 AI Gateway + Unity AI Gateway (Beta) | Azure resource/network 정책 + 애플리케이션 안전 계층 |
 | 지원 경로 | Azure Databricks 지원 | Microsoft Support |
 
@@ -43,9 +44,9 @@ Foundry에서도 Claude는 Microsoft 모델이 아닙니다. 두 hosting option 
 | --- | --- | --- |
 | 개발용 인증 | PAT(legacy) 또는 사용자 OAuth | API key 또는 Microsoft Entra ID |
 | 운영용 인증 | 서비스 주체 OAuth M2M 권장 | Managed Identity/서비스 주체 + Entra ID 권장 |
-| 추론 권한 | endpoint `CAN QUERY`; Foundation Model UC 권한 사용 시 대상 `system.ai` 모델 `EXECUTE` | Foundry resource 범위의 `Foundry User`(구 `Azure AI User`) 권장. 직접 모델 호출은 `Cognitive Services User`도 가능 |
+| 추론 권한 | Databricks-hosted pay-per-token은 workspace 접근과 유효한 token, Foundation Model UC 사용 시 대상 `system.ai` 모델 `EXECUTE`; custom/external endpoint는 `CAN QUERY` | Foundry resource 범위의 `Foundry User`(구 `Azure AI User`) 권장. 직접 모델 호출은 `Cognitive Services User`도 가능 |
 | 배포 권한 | 모델/endpoint 유형별 관리 권한 | Resource group `Contributor`/`Owner` + Marketplace 구독 권한 |
-| 역할 할당 | endpoint `CAN MANAGE` 또는 workspace admin | `Owner` 또는 `User Access Administrator` 등 역할 할당 권한 |
+| 역할 할당 | Foundation Model UC는 account/metastore admin, custom endpoint ACL은 `CAN MANAGE` 또는 workspace admin | `Owner` 또는 `User Access Administrator` 등 역할 할당 권한 |
 
 Foundry에서 `Owner`나 `Contributor`만 있다고 Entra 기반 추론 권한이 생기지는 않습니다.
 호출 주체에는 별도로 `Foundry User`(구 `Azure AI User`)를 부여하는 것이 권장됩니다.
@@ -188,7 +189,7 @@ Data Processing Addendum가 적용됩니다. Hosted on Azure도 automatic safegu
 | 항목 | Azure Databricks | Microsoft Foundry |
 | --- | --- | --- |
 | 이 리포의 Python 샘플 | `OpenAIChatCompletionClient` + OpenAI 호환 endpoint | 직접 전환 시 client/auth/base URL 변경 필요 |
-| Claude Code | 네이티브 Anthropic endpoint로 custom base URL 연결 또는 `ucode` | 공식 Foundry integration(`CLAUDE_CODE_USE_FOUNDRY=1`)과 API key/Entra ID 지원 |
+| Claude Code | 네이티브 Anthropic endpoint로 직접 연결. Unity AI Gateway model provider service는 Preview `ucode --provider` 경로 사용 | 공식 Foundry integration(`CLAUDE_CODE_USE_FOUNDRY=1`)과 API key/Entra ID 지원 |
 | Claude API 기능 | Databricks가 노출한 Anthropic 호환 범위 | 선택한 Foundry hosting option이 지원하는 Claude API 범위 |
 | Agent 서비스 | 직접 구성 또는 Databricks agent 기능 | Microsoft Agent Framework 또는 Agent Service가 지원하는 Claude deployment 사용; 외부 gateway 모델은 BYOM |
 
@@ -216,9 +217,9 @@ API를 구현해야 하므로, Foundry Claude의 네이티브 Anthropic Messages
 
 | 작업 | Azure Databricks | Microsoft Foundry |
 | --- | --- | --- |
-| 모델 호출 권한 부여 | endpoint `CAN MANAGE` 보유자 또는 workspace admin | Azure role assignment 권한 보유자 |
-| 모델 호출 | endpoint `CAN QUERY`; Foundation Model UC 권한 사용 시 모델 `EXECUTE` | `Foundry User`(구 `Azure AI User`) 권장. 직접 모델 호출은 `Cognitive Services User`도 가능 |
-| endpoint/AI Gateway 설정 | endpoint `CAN MANAGE` | Foundry resource/project 관리 역할 |
+| 모델 호출 권한 부여 | Foundation Model UC는 account/metastore admin, custom endpoint ACL은 `CAN MANAGE` 보유자 또는 workspace admin | Azure role assignment 권한 보유자 |
+| 모델 호출 | Databricks-hosted pay-per-token은 workspace 접근과 token, Foundation Model UC 사용 시 모델 `EXECUTE`; custom endpoint는 `CAN QUERY` | `Foundry User`(구 `Azure AI User`) 권장. 직접 모델 호출은 `Cognitive Services User`도 가능 |
+| endpoint/AI Gateway 설정 | custom endpoint는 `CAN MANAGE`; Unity AI Gateway는 대상 service와 Unity Catalog 권한 | Foundry resource/project 관리 역할 |
 | Marketplace 구독·배포 | 해당 없음 | Marketplace 구매 권한 + resource group `Contributor`/`Owner` |
 | 시스템 사용량 조회 | endpoint `system.serving.*`은 전용 문서상 account admin이며 일반 system-table grant로 위임 가능. Unity `system.ai_gateway.usage`는 현재 account admin만 가능 | Foundry Monitoring, Cost Management, Monitor별 RBAC |
 | 데이터 거버넌스 | Unity Catalog + account/workspace 역할 | Azure RBAC + resource/project 권한 |
