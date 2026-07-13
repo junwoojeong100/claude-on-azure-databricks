@@ -25,27 +25,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install PSScriptAnalyzer
+      - name: Validate PowerShell documentation
         shell: pwsh
-        run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module PSScriptAnalyzer `
-            -RequiredVersion 1.25.0 `
-            -Scope CurrentUser `
-            -Force
-      - name: Run PSScriptAnalyzer
-        shell: pwsh
-        run: |
-          $results = Invoke-ScriptAnalyzer `
-            -Path scripts/setup_claude_code_databricks.ps1 `
-            -Settings .psscriptanalyzer.psd1
-          $results | Format-Table -AutoSize
-          if ($results) {
-              throw "PSScriptAnalyzer found $($results.Count) issue(s)."
-          }
-      - name: Run PowerShell tests
-        shell: pwsh
-        run: ./tests/test_setup_claude_code_databricks.ps1
+        run: ./tests/test_documentation.ps1
 
   python:
     name: Python

@@ -27,17 +27,7 @@ ENDPOINT_EXPLICIT=0
 if [ -n "${ENDPOINT:-}" ] || [ -n "${DATABRICKS_SERVING_ENDPOINT:-}" ]; then
   ENDPOINT_EXPLICIT=1
 fi
-FAST_ENDPOINT_EXPLICIT=0
-if [ -n "${DATABRICKS_FAST_ENDPOINT:-}" ]; then
-  FAST_ENDPOINT_EXPLICIT=1
-fi
-MODELS_EXPLICIT=0
-if [ -n "${DATABRICKS_MODELS:-}" ]; then
-  MODELS_EXPLICIT=1
-fi
 ENDPOINT="${ENDPOINT:-${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-4-8}}"  # target model
-DATABRICKS_FAST_ENDPOINT="${DATABRICKS_FAST_ENDPOINT:-}"     # optional Haiku/lightweight background model
-DATABRICKS_MODELS="${DATABRICKS_MODELS:-}"                   # optional Claude Code preset candidates
 FALLBACK="${FALLBACK:-databricks-meta-llama-3-3-70b-instruct}"  # proves pipeline
 PAT_LIFETIME_SECONDS="${PAT_LIFETIME_SECONDS:-7776000}"    # 90 days
 ROTATE_PAT="${ROTATE_PAT:-0}"                              # 1 creates a new PAT
@@ -80,8 +70,6 @@ load_existing_config() {
   EXISTING_HOST=""
   EXISTING_TOKEN=""
   EXISTING_ENDPOINT=""
-  EXISTING_FAST_ENDPOINT=""
-  EXISTING_MODELS=""
   [ -f "$ROOT/.env" ] || return 0
 
   while IFS= read -r line || [ -n "$line" ]; do
@@ -100,8 +88,6 @@ load_existing_config() {
       DATABRICKS_HOST) EXISTING_HOST="$value" ;;
       DATABRICKS_TOKEN) EXISTING_TOKEN="$value" ;;
       DATABRICKS_SERVING_ENDPOINT) EXISTING_ENDPOINT="$value" ;;
-      DATABRICKS_FAST_ENDPOINT) EXISTING_FAST_ENDPOINT="$value" ;;
-      DATABRICKS_MODELS) EXISTING_MODELS="$value" ;;
     esac
   done < "$ROOT/.env"
 }
@@ -162,12 +148,6 @@ if [ "${EXISTING_HOST%/}" = "$HOST" ]; then
   if [ "$ENDPOINT_EXPLICIT" = "0" ] && [ -n "$EXISTING_ENDPOINT" ]; then
     ENDPOINT="$EXISTING_ENDPOINT"
   fi
-  if [ "$FAST_ENDPOINT_EXPLICIT" = "0" ] && [ -n "$EXISTING_FAST_ENDPOINT" ]; then
-    DATABRICKS_FAST_ENDPOINT="$EXISTING_FAST_ENDPOINT"
-  fi
-  if [ "$MODELS_EXPLICIT" = "0" ] && [ -n "$EXISTING_MODELS" ]; then
-    DATABRICKS_MODELS="$EXISTING_MODELS"
-  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -210,20 +190,6 @@ DATABRICKS_HOST=$HOST
 # Databricks Model Serving 엔드포인트 이름
 DATABRICKS_SERVING_ENDPOINT=$ENDPOINT
 EOF
-if [ -n "$DATABRICKS_FAST_ENDPOINT" ]; then
-  cat >> "$ROOT/.env" <<EOF
-
-# Claude Code Haiku/lightweight background model
-DATABRICKS_FAST_ENDPOINT=$DATABRICKS_FAST_ENDPOINT
-EOF
-fi
-if [ -n "$DATABRICKS_MODELS" ]; then
-  cat >> "$ROOT/.env" <<EOF
-
-# Claude Code /model preset mappings
-DATABRICKS_MODELS="$DATABRICKS_MODELS"
-EOF
-fi
 cat >> "$ROOT/.env" <<EOF
 
 # Fast local validation: Databricks Personal Access Token (PAT)
