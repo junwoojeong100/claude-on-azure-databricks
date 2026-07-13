@@ -100,7 +100,7 @@ class DocumentationTests(unittest.TestCase):
         guide = guide_path.read_text(encoding="utf-8")
 
         for required_text in (
-            ".claude/settings.local.json",
+            "~/.claude/settings.json",
             "ANTHROPIC_BASE_URL",
             "ANTHROPIC_AUTH_TOKEN",
             "ANTHROPIC_DEFAULT_OPUS_MODEL",

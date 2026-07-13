@@ -1,11 +1,11 @@
 # Claude Code에서 Azure Databricks Claude 사용하기
 
 Azure Databricks workspace에서 Anthropic Claude 모델을 이미 호출할 수 있다면
-`.claude/settings.local.json` 파일 하나로 Claude Code를 연결할 수 있습니다.
+`~/.claude/settings.json` 파일 하나로 Claude Code를 연결할 수 있습니다.
 
 ```text
 Claude Code
-  └─ .claude/settings.local.json
+  └─ ~/.claude/settings.json
        └─ Azure Databricks /serving-endpoints/anthropic/v1/messages
 ```
 
@@ -44,22 +44,22 @@ Opus 4.8은 2.1.154 이상, Sonnet 5는 2.1.197 이상이 필요합니다.
 
 ## 2. Settings 파일 만들기
 
-프로젝트 루트에서 `.claude` 디렉터리를 만듭니다.
+사용자 전역 Claude Code 설정 디렉터리를 만듭니다.
 
 macOS/Linux:
 
 ```bash
-mkdir -p .claude
-chmod 700 .claude
+mkdir -p "$HOME/.claude"
+chmod 700 "$HOME/.claude"
 ```
 
 Windows PowerShell:
 
 ```powershell
-New-Item -ItemType Directory -Force -Path .claude | Out-Null
+New-Item -ItemType Directory -Force -Path "$HOME\.claude" | Out-Null
 ```
 
-`.claude/settings.local.json`:
+`~/.claude/settings.json`:
 
 ```json
 {
@@ -96,20 +96,25 @@ New-Item -ItemType Directory -Force -Path .claude | Out-Null
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | `/model`의 `sonnet`을 Databricks Sonnet에 연결 |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `/model`의 `haiku`를 Databricks Haiku에 연결 |
 
-이 리포는 `.claude/settings.local.json`을 Git에서 제외합니다. 파일 권한도 제한합니다.
+기존 `~/.claude/settings.json`이 있다면 파일 전체를 덮어쓰지 말고 아래 키를 병합합니다.
+설정 파일에는 PAT가 들어가므로 파일 권한을 제한합니다.
 
 macOS/Linux:
 
 ```bash
-chmod 600 .claude/settings.local.json
+chmod 600 "$HOME/.claude/settings.json"
 ```
 
 Windows PowerShell:
 
 ```powershell
-icacls .claude\settings.local.json `
+icacls "$HOME\.claude\settings.json" `
   /inheritance:r /grant:r "${env:USERNAME}:(M)" | Out-Null
 ```
+
+현재 리포에서만 Databricks를 사용하려면 같은 JSON을
+`.claude/settings.local.json`에 넣습니다. Local settings가 사용자 전역 settings보다
+우선합니다.
 
 ## 3. 연결 확인
 

@@ -83,25 +83,21 @@ Claude Code
   └─ https://<workspace-host>/serving-endpoints/anthropic/v1/messages
 ```
 
-### 한 파일 설정
+### 사용자 전역 설정
 
 macOS/Linux:
 
 ```bash
-git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
-cd claude-on-azure-databricks
-mkdir -p .claude
+mkdir -p "$HOME/.claude"
 ```
 
 Windows PowerShell:
 
 ```powershell
-git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
-Set-Location claude-on-azure-databricks
-New-Item -ItemType Directory -Force -Path .claude | Out-Null
+New-Item -ItemType Directory -Force -Path "$HOME\.claude" | Out-Null
 ```
 
-`.claude/settings.local.json`에 workspace URL, PAT, 모델 ID를 입력합니다.
+`~/.claude/settings.json`에 workspace URL, PAT, 모델 ID를 입력합니다.
 Claude Code가 이 파일을 직접 읽어 `/model` 선택기의 Opus/Sonnet/Haiku mapping까지
 구성하므로 별도 자동 스크립트는 필요하지 않습니다.
 
@@ -114,6 +110,8 @@ Claude Code가 이 파일을 직접 읽어 `/model` 선택기의 Opus/Sonnet/Hai
 전체 JSON은
 [Claude Code에서 Azure Databricks Claude 사용하기](docs/claude-code-databricks.md)를
 따르세요.
+
+현재 리포에만 적용하려면 같은 JSON을 `.claude/settings.local.json`에 넣습니다.
 
 ### 연결 확인
 
