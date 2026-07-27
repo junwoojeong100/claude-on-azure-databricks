@@ -69,30 +69,24 @@ New-Item -ItemType Directory -Force -Path "$HOME\.claude" | Out-Null
       "WebSearch"
     ]
   },
-  "availableModels": [
-    "claude-opus-5",
-    "claude-opus-4-8",
-    "claude-sonnet-5",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5"
-  ],
-  "enforceAvailableModels": true,
-  "modelOverrides": {
-    "claude-opus-5": "databricks-claude-opus-5",
-    "claude-opus-4-8": "databricks-claude-opus-4-8",
-    "claude-sonnet-5": "databricks-claude-sonnet-5",
-    "claude-sonnet-4-6": "databricks-claude-sonnet-4-6",
-    "claude-haiku-4-5": "databricks-claude-haiku-4-5"
-  },
   "env": {
     "ANTHROPIC_BASE_URL": "https://<workspace-host>/serving-endpoints/anthropic",
     "ANTHROPIC_AUTH_TOKEN": "<databricks-pat>",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5[1m]",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-5[1m]",
     "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus 5 (1M context)",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-5[1m]",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-4-8[1m]",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 4.8 (1M context)",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "databricks-claude-sonnet-5[1m]",
     "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5 (1M context)",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Custom Sonnet model (1M context)",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-4-6[1m]",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Sonnet 4.6 (1M context)",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Custom Sonnet model (1M context)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-4-5",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku 4.5 (200K context)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Custom Haiku model (200K context)",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
   }
 }
@@ -111,20 +105,25 @@ New-Item -ItemType Directory -Force -Path "$HOME\.claude" | Out-Null
 | --- | --- |
 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` | Databricks가 지원하지 않는 Claude beta 요청 비활성화 |
 | `permissions.deny: ["WebSearch"]` | Databricks가 지원하지 않는 hosted `WebSearch` 차단 |
-| `availableModels` | 메인 세션, subagent, skill, advisor를 지정한 5개 모델 버전으로 제한 |
-| `enforceAvailableModels` | `/model`의 Default도 위 allowlist 안에서 선택 |
-| `modelOverrides` | `/model`의 Anthropic 모델 버전별 항목을 Databricks endpoint ID에 연결 |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | `opus` alias와 Opus 기본값을 Opus 5 1M context에 연결 |
+| `ANTHROPIC_DEFAULT_FABLE_MODEL` | `fable` picker 자리를 Opus 4.8 1M context에 연결 |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | `sonnet` alias와 Sonnet 기본값을 Sonnet 5 1M context에 연결 |
+| `ANTHROPIC_CUSTOM_MODEL_OPTION` | 추가 picker 항목을 Sonnet 4.6 1M context에 연결 |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | `haiku` alias와 Haiku 기본값을 Haiku 4.5에 연결 |
-| `ANTHROPIC_DEFAULT_*_MODEL_NAME` | `/model` picker에 모델 이름과 context 크기 표시 |
+| `*_MODEL_NAME`, `*_DESCRIPTION` | `/model` picker에 모델 이름과 context 크기 표시 |
 
 `[1m]`은 custom `ANTHROPIC_BASE_URL` 뒤에서 1M context를 선택하는 Claude Code
-selector입니다. Claude Code는 selector를 제거한 뒤 `modelOverrides`의 Databricks 모델 ID를
-API에 전송하므로 실제 catalog 모델 ID에는 `[1m]`이 포함되지 않습니다.
+selector입니다. Claude Code는 selector를 제거한 Databricks 모델 ID를 API에 전송하므로
+실제 catalog 모델 ID에는 `[1m]`이 포함되지 않습니다.
+
+Claude Code는 이름을 지정할 수 있는 custom picker 항목을 하나만 제공합니다. 따라서 이
+설정은 `fable` picker 자리를 Opus 4.8에 사용하고, 단일 custom option을 Sonnet 4.6에
+사용합니다. `/model fable`을 직접 입력해도 Opus 4.8이 선택되며 Fable 5는 이 구성에
+포함되지 않습니다.
 
 기존 `~/.claude/settings.json`이 있다면 파일 전체를 덮어쓰지 말고 아래 키를 병합합니다.
 설정 파일에는 PAT가 들어가므로 파일 권한을 제한합니다.
+Claude Code를 실행 중이라면 완전히 종료한 뒤 다시 시작해야 picker 항목이 갱신됩니다.
 
 macOS/Linux:
 
@@ -149,11 +148,11 @@ macOS/Linux:
 
 ```bash
 models=(
-  "claude-opus-5[1m]"
-  "claude-opus-4-8[1m]"
-  "claude-sonnet-5[1m]"
-  "claude-sonnet-4-6[1m]"
-  "claude-haiku-4-5"
+  "databricks-claude-opus-5[1m]"
+  "databricks-claude-opus-4-8[1m]"
+  "databricks-claude-sonnet-5[1m]"
+  "databricks-claude-sonnet-4-6[1m]"
+  "databricks-claude-haiku-4-5"
 )
 
 for model in "${models[@]}"; do
@@ -167,11 +166,11 @@ Windows PowerShell:
 
 ```powershell
 $models = @(
-  'claude-opus-5[1m]'
-  'claude-opus-4-8[1m]'
-  'claude-sonnet-5[1m]'
-  'claude-sonnet-4-6[1m]'
-  'claude-haiku-4-5'
+  'databricks-claude-opus-5[1m]'
+  'databricks-claude-opus-4-8[1m]'
+  'databricks-claude-sonnet-5[1m]'
+  'databricks-claude-sonnet-4-6[1m]'
+  'databricks-claude-haiku-4-5'
 )
 
 $models | ForEach-Object {
@@ -196,38 +195,33 @@ claude
 
 자동 스크립트는 필요하지 않습니다. Claude Code가 settings 파일의 다음 값을 읽어
 `/model` 항목을 구성합니다. 기본 JSON은 Opus와 Sonnet의 최신 2개 버전, Haiku의 최신
-1개 버전으로 선택 범위를 제한합니다.
+1개 버전에 이름과 context 크기를 표시합니다.
 
 | Picker 모델 | Claude Code 선택값 | Databricks 모델 ID | `contextWindow` |
 | --- | --- | --- | --- |
-| Opus 5 | `claude-opus-5[1m]` | `databricks-claude-opus-5` | 1,000,000 |
-| Opus 4.8 | `claude-opus-4-8[1m]` | `databricks-claude-opus-4-8` | 1,000,000 |
-| Sonnet 5 | `claude-sonnet-5[1m]` | `databricks-claude-sonnet-5` | 1,000,000 |
-| Sonnet 4.6 | `claude-sonnet-4-6[1m]` | `databricks-claude-sonnet-4-6` | 1,000,000 |
-| Haiku 4.5 | `claude-haiku-4-5` | `databricks-claude-haiku-4-5` | 200,000 |
+| `Opus 5 (1M context)` | `opus` | `databricks-claude-opus-5` | 1,000,000 |
+| `Opus 4.8 (1M context)` | `fable` | `databricks-claude-opus-4-8` | 1,000,000 |
+| `Sonnet 5 (1M context)` | `sonnet` | `databricks-claude-sonnet-5` | 1,000,000 |
+| `Sonnet 4.6 (1M context)` | `databricks-claude-sonnet-4-6[1m]` | `databricks-claude-sonnet-4-6` | 1,000,000 |
+| `Haiku 4.5 (200K context)` | `haiku` | `databricks-claude-haiku-4-5` | 200,000 |
 
 설정 후 다섯 모델의 API와 Claude Code 호출이 모두 성공하는지 연결 확인 명령으로
 검증하세요.
 
-Claude Code 2.1.219는 `fable`과 `best`도 기본 모델 선택지로 제공합니다. 하지만 Fable은
-workspace·리전별 가용성을 별도로 확인해야 하고 Databricks에서는 프롬프트와 응답을
-trust and safety 목적으로 30일 보존합니다. 따라서 기본 설정은 Fable을 매핑하지 않고
-`availableModels`와 `enforceAvailableModels`로 선택을 차단합니다. Fable을 추가하려면
-먼저 `databricks-claude-fable-5`의 네이티브 Anthropic API 호출이 성공하는지와 보존
-정책을 확인한 뒤 `availableModels`, `modelOverrides`, `ANTHROPIC_DEFAULT_FABLE_MODEL`과
-해당 `_NAME`을 함께 추가하세요. `--model best`처럼 allowlist 밖 모델을 명시하면 허용된
-기본 모델로 대체될 수 있습니다.
+실제 Fable 5를 사용하려면 Opus 4.8에 사용한 `ANTHROPIC_DEFAULT_FABLE_MODEL` mapping을
+되돌려야 합니다. Databricks의 Fable은 프롬프트와 응답을 trust and safety 목적으로 30일
+보존하므로 workspace·리전 가용성과 보존 정책을 먼저 확인하세요.
 
-Workspace에서 일부 모델만 호출할 수 있다면 `availableModels`와 `modelOverrides`에서
-호출할 수 없는 모델 항목을 함께 제거하세요.
+Workspace에서 일부 모델만 호출할 수 있다면 해당 `ANTHROPIC_DEFAULT_*` 또는
+`ANTHROPIC_CUSTOM_MODEL_OPTION*` 항목을 제거하세요.
 
 ## 5. Context window
 
 좌우 방향키로 바꾸는 값은 reasoning effort이며 context window가 아닙니다. Custom
 `ANTHROPIC_BASE_URL` 뒤에서는 Claude Code가 Databricks 모델 ID의 context window를
-자동으로 추론하지 못할 수 있습니다. 이 가이드는 Opus와 Sonnet 선택값에 `[1m]` selector를
-사용하고 `modelOverrides`로 실제 Databricks 모델을 연결합니다. 실제 적용값은 연결 확인
-결과의 `modelUsage.contextWindow`로 확인합니다.
+자동으로 추론하지 못할 수 있습니다. 이 가이드는 Opus와 Sonnet의 model 값에 `[1m]`
+selector를 사용하고 picker 이름과 설명에도 `1M context`를 표시합니다. 실제 적용값은
+연결 확인 결과의 `modelUsage.contextWindow`로 확인합니다.
 
 2026-07-27 Azure Databricks 모델 catalog와 Anthropic 모델 문서 기준:
 
@@ -268,8 +262,9 @@ model limit을 교차 확인한 값입니다. 모델 ID가 catalog에 있어도 
 | beta 관련 400 | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
 | `web_search_*` 관련 400 | `permissions.deny`의 `WebSearch` |
 | Opus 또는 Sonnet의 `contextWindow`가 `200000` | `ANTHROPIC_DEFAULT_*_MODEL` 값 끝의 `[1m]`과 Claude Code 재시작 |
-| picker 모델이 잘못된 Databricks endpoint로 연결됨 | `availableModels`와 `modelOverrides`의 키 일치 여부 |
-| `fable`, `best` 또는 Default가 미검증 모델로 연결됨 | 기본 JSON의 `availableModels`와 `enforceAvailableModels` 병합 여부 |
+| picker가 이전 3개 모델만 표시함 | settings 저장 후 Claude Code 완전 종료와 재실행 |
+| Opus 4.8 또는 Sonnet 4.6이 없음 | `ANTHROPIC_DEFAULT_FABLE_MODEL*`, `ANTHROPIC_CUSTOM_MODEL_OPTION*` 병합 여부 |
+| picker 모델이 잘못된 Databricks endpoint로 연결됨 | 각 `ANTHROPIC_DEFAULT_*_MODEL`과 custom option 값 |
 | 모델을 찾지 못함 | 실제 모델 ID와 리전 가용성 |
 | `403 ... rate limit of 0` | 모델·리전, rate limit, `CAN QUERY`/`EXECUTE`, 계정 용량 |
 

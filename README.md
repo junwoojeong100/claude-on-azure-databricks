@@ -118,11 +118,11 @@ settings 파일에 복사하는 것만으로는 장기 사용에 적합하지 �
 
 ```bash
 models=(
-  "claude-opus-5[1m]"
-  "claude-opus-4-8[1m]"
-  "claude-sonnet-5[1m]"
-  "claude-sonnet-4-6[1m]"
-  "claude-haiku-4-5"
+  "databricks-claude-opus-5[1m]"
+  "databricks-claude-opus-4-8[1m]"
+  "databricks-claude-sonnet-5[1m]"
+  "databricks-claude-sonnet-4-6[1m]"
+  "databricks-claude-haiku-4-5"
 )
 
 for model in "${models[@]}"; do

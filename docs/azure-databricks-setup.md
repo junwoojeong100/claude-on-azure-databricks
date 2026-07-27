@@ -37,8 +37,8 @@ cross-Geo 대상으로 표시되지만 Sonnet 5는 현재 리전 표에 없습�
 
 이 스크립트의 기본 smoke test 모델과 Claude Code의 `/model` picker 구성은 서로
 독립적입니다. Picker에서 Opus 5·4.8, Sonnet 5·4.6, Haiku 4.5를 선택하려면
-[Claude Code 연결 가이드](claude-code-databricks.md)의 `availableModels`와
-`modelOverrides` 설정을 적용하세요.
+[Claude Code 연결 가이드](claude-code-databricks.md)의 모델 alias와 custom option
+설정을 적용하세요.
 
 ## 1. 자동 생성: macOS, Linux, WSL
 
