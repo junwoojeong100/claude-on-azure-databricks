@@ -36,11 +36,11 @@ cross-Geo 대상으로 표시되지만 Sonnet 5는 현재 리전 표에 없습�
 조직의 데이터 레지던시 요구사항을 먼저 확인해야 합니다.
 
 이 스크립트의 기본 smoke test 모델과 Claude Code의 `/model` picker 구성은 서로
-독립적입니다. Picker에서 Opus 5·4.8, Sonnet 5·4.6, Haiku 4.5를 선택하려면
-[Claude Code 연결 가이드](claude-code-databricks.md)의 모델 alias와 custom option
-설정을 적용하세요.
+독립적입니다. Smoke test는 모델 하나로 연결을 확인하고, Claude Code 설정은
+[Claude Code 연결 가이드](claude-code-databricks.md#4-다중-모델-영구-설정)의 기본
+다중 모델 구성을 적용하세요.
 
-## 1. 자동 생성: macOS, Linux, WSL
+## 1. 자동 생성
 
 자동 스크립트는 workspace를 만든 뒤 빠른 로컬 검증용 PAT와 `.env`까지
 준비합니다.
@@ -55,6 +55,15 @@ cd claude-on-azure-databricks
 python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else "Python 3.10+ required")'
 ```
 
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
+Set-Location claude-on-azure-databricks
+
+py -3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else "Python 3.10+ required")'
+```
+
 ### Azure 로그인
 
 ```bash
@@ -65,12 +74,25 @@ az account set --subscription "<name-or-id>"
 
 ### Workspace 생성
 
+macOS, Linux, WSL:
+
 ```bash
 RG=my-rg LOCATION=eastus2 WORKSPACE=my-workspace \
   scripts/setup_databricks_claude.sh
 ```
 
+Windows PowerShell:
+
+```powershell
+.\scripts\Setup-DatabricksClaude.ps1 `
+  -ResourceGroup my-rg `
+  -Location eastus2 `
+  -Workspace my-workspace
+```
+
 환경변수를 생략하면 다음 기본값을 사용합니다.
+PowerShell에서는 `-ResourceGroup`, `-Location`, `-Workspace` 같은 parameter로 같은
+값을 직접 지정할 수 있습니다.
 
 | 변수 | 기본값 | 역할 |
 | --- | --- | --- |
@@ -78,7 +100,9 @@ RG=my-rg LOCATION=eastus2 WORKSPACE=my-workspace \
 | `LOCATION` | `eastus2` | Azure 리전 |
 | `WORKSPACE` | `ws-databricks-claude` | Databricks workspace |
 | `SKU` | `premium` | Workspace SKU |
-| `DATABRICKS_SERVING_ENDPOINT` | `databricks-claude-opus-4-8` | 검증할 Claude 모델 |
+| `DATABRICKS_SERVING_ENDPOINT` | `databricks-claude-opus-5` | 검증할 기본 Claude 모델 |
+| `CONFIGURE_CLAUDE_CODE` | `1` | 성공 시 Claude Code 다중 모델 설정 병합 |
+| `CLAUDE_CODE_SCOPE` | `user` | `user` 또는 `project` 설정 범위 |
 | `RUN_AGENT` | `0` | 선택 MAF 샘플 실행 여부 |
 
 스크립트는 다음 작업을 수행합니다.
@@ -87,6 +111,7 @@ RG=my-rg LOCATION=eastus2 WORKSPACE=my-workspace \
 2. Azure 로그인으로 로컬 검증용 PAT 생성 또는 기존 유효 PAT 재사용
 3. 프로젝트 루트에 권한이 제한된 `.env` 작성
 4. 설정한 Claude 모델의 OpenAI 호환 API와 네이티브 Anthropic API smoke test
+5. 기존 설정을 백업하고 Claude Code 다중 모델 설정 병합
 
 OpenAI 호환 경로만 성공하고 네이티브 Anthropic 경로가 실패하면 MAF 진단에는 `.env`를
 사용할 수 있지만 Claude Code 연결은 아직 준비되지 않은 상태입니다.
@@ -95,9 +120,19 @@ OpenAI 호환 경로만 성공하고 네이티브 Anthropic 경로가 실패하�
 
 ```dotenv
 DATABRICKS_HOST=https://<workspace-host>
-DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8
+DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-5
 DATABRICKS_TOKEN=<databricks-token>
 ```
+
+Claude Code 설정은 기본적으로 `~/.claude/settings.json`에 병합됩니다. 기존 파일은
+변경 전에 `.bak.<timestamp>`로 백업하며 최신 백업 1개만 유지합니다. 현재 프로젝트에만
+적용하려면 다음처럼 실행하세요.
+
+```bash
+CLAUDE_CODE_SCOPE=project scripts/setup_databricks_claude.sh
+```
+
+Claude Code 설정을 건드리지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 사용합니다.
 
 같은 workspace에서 다시 실행하면 유효한 `.env` PAT를 재사용합니다. 새 PAT가 꼭 필요할
 때만 다음 옵션을 사용하고, 새 token을 검증한 뒤 이전 token을 폐기하세요.
@@ -176,6 +211,13 @@ Workspace 생성만으로 모든 Claude 모델을 호출할 수 있는 것은 �
 Workspace URL, 호출 가능한 Claude 모델 ID, token을 준비한 뒤
 [기존 workspace에 Claude Code 연결하기](claude-code-databricks.md)를 따릅니다.
 이 경로는 MAF를 사용하지 않습니다.
+
+프로젝트 루트의 `.env`가 준비되어 있다면 다음 명령으로 다중 모델 설정을 바로
+병합할 수 있습니다.
+
+```bash
+python3 scripts/configure_claude_code.py
+```
 
 ### Microsoft Agent Framework 테스트
 

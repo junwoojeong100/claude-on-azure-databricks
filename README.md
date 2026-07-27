@@ -1,31 +1,30 @@
 # Claude on Azure Databricks
 
-이 리포지토리는 서로 독립적인 두 가지 작업을 안내합니다.
+Azure Databricks의 네이티브 Anthropic Messages API를 Claude Code의 모델
+backend로 사용하는 방법을 안내합니다.
 
-| 현재 상태 | 시작할 가이드 | 완료 결과 |
-| --- | --- | --- |
-| Azure Databricks workspace가 없음 | [1. Azure Databricks workspace 만들기](#1-azure-databricks-workspace-만들기) | 새 workspace와 접속 정보 준비 |
-| Workspace에서 Anthropic Claude를 이미 호출할 수 있음 | [2. 기존 workspace에 Claude Code 연결하기](#2-기존-workspace에-claude-code-연결하기) | Claude Code가 Databricks의 네이티브 Anthropic API를 직접 사용 |
-
-**두 번째 가이드는 첫 번째 가이드를 실행하지 않아도 됩니다.** 회사나 다른 팀이 만든
-workspace, 이미 배포된 serving endpoint, Databricks-hosted Claude 모델을 그대로 사용할
-수 있습니다.
-
-Microsoft Agent Framework(MAF) 샘플은 workspace와 모델 연결을 확인하는 별도 실습으로
-유지합니다. 다만 workspace 생성이나 Claude Code 연결의 필수 단계로 묶지는 않습니다.
+가장 일반적인 고객 경로는 **기존 workspace에서 Claude 모델 하나로 API를 먼저 검증한
+뒤, Claude Code에는 여러 Databricks 모델을 한 번에 등록하는 것**입니다. Workspace 생성과
+Microsoft Agent Framework(MAF)는 첫 연결에 필요하지 않습니다.
 
 > 공식 문서 확인: 2026-07-27. 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로
 > 운영 적용 전 공식 문서를 다시 확인하세요.
 
-## 1. Azure Databricks workspace 만들기
+## 1. 5분 연결: 기존 workspace에 Claude Code 연결
 
-새 Azure Databricks workspace가 필요한 사용자를 위한 경로입니다.
+다음 세 값이 준비되어 있으면 바로 시작할 수 있습니다.
 
-> Workspace 생성과 Claude 모델 가용성은 별개입니다. 사용할 Claude 모델이 지원되는
-> 리전을 먼저 선택하세요. 이 리포의 스크립트는 custom model serving endpoint를
-> 배포하지 않고, 해당 workspace에서 호출 가능한 Databricks-hosted 모델을 검증합니다.
+| 값 | 예 |
+| --- | --- |
+| Workspace URL | `https://adb-<workspace-id>.<number>.azuredatabricks.net` |
+| Databricks credential | 빠른 검증은 PAT, 장기 사용자 인증은 OAuth U2M |
+| 호출 가능한 Claude 모델 ID 하나 | `databricks-claude-opus-5` |
 
-### 빠른 시작
+아래 예시는 현재 기본 모델인 Opus 5를 사용합니다. Workspace에서 다른 모델만 사용할
+수 있다면 `DATABRICKS_MODEL`을 실제 모델 ID로 바꾸세요. 설정 자동화에는 Git과
+Python 3.10 이상이 필요합니다.
+
+### 1. Databricks API부터 확인
 
 macOS, Linux 또는 WSL:
 
@@ -33,7 +32,71 @@ macOS, Linux 또는 WSL:
 git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
 cd claude-on-azure-databricks
 
-python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else "Python 3.10+ required")'
+export ANTHROPIC_BASE_URL="https://<workspace-host>/serving-endpoints/anthropic"
+export ANTHROPIC_AUTH_TOKEN="<databricks-token>"
+export DATABRICKS_MODEL="databricks-claude-opus-5"
+
+curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
+  -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d "{\"model\":\"$DATABRICKS_MODEL\",\"max_tokens\":16,\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}]}"
+```
+
+응답의 최상위 `type`이 `message`이면 workspace URL, credential, 모델 ID가 모두
+정상입니다. 이 단계가 실패하면 Claude Code 설정을 변경하기 전에 Databricks 권한·리전·
+모델 가용성을 먼저 해결하세요.
+
+Windows PowerShell을 포함한 전체 명령은
+[Claude Code 연결 가이드](docs/claude-code-databricks.md#2-databricks-api부터-검증)를
+참조하세요.
+
+### 2. Claude Code에서 확인
+
+```bash
+export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1
+
+claude --model "databricks-claude-opus-5[1m]" \
+  -p "Reply with exactly: CLAUDE CODE OK" \
+  --output-format json
+```
+
+`is_error`가 `false`이고 `modelUsage`에 Databricks 모델 ID가 표시되면 연결된 것입니다.
+대화형으로 `claude`를 실행한 뒤 `/status`에서 다음 항목도 확인할 수 있습니다.
+
+- `Anthropic base URL`: Databricks workspace의 `/serving-endpoints/anthropic`
+- `Auth token`: `ANTHROPIC_AUTH_TOKEN`
+
+### 3. 다중 모델 설정 저장
+
+임시 검증이 끝난 같은 터미널에서 설정 도구를 실행합니다.
+
+```bash
+python3 scripts/configure_claude_code.py
+```
+
+Windows PowerShell:
+
+```powershell
+py -3 scripts\configure_claude_code.py
+```
+
+도구는 기존 `~/.claude/settings.json`을 백업하고 관련 키만 병합합니다. 백업은 최신
+1개만 유지합니다. `/model` picker에는 Opus·Sonnet 각 2개와 Haiku 1개가 바로 표시되며
+기본 모델은 Opus 5입니다. 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
+
+## 2. Workspace가 없다면
+
+새 Azure Databricks workspace가 필요할 때만
+[Azure Databricks workspace 생성 가이드](docs/azure-databricks-setup.md)를 사용합니다.
+
+macOS, Linux 또는 WSL에서는 다음 스크립트가 리소스 그룹과 Premium classic workspace를
+만들고, PAT와 네이티브 Anthropic API를 검증한 뒤 Claude Code 다중 모델 설정까지
+완료합니다.
+
+```bash
+git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
+cd claude-on-azure-databricks
 
 az extension add --name databricks --upgrade
 az login
@@ -43,122 +106,53 @@ RG=my-rg LOCATION=eastus2 WORKSPACE=my-workspace \
   scripts/setup_databricks_claude.sh
 ```
 
-스크립트는 다음 작업을 수행합니다.
-
-1. 리소스 그룹과 Azure Databricks workspace 생성 또는 재사용
-2. 빠른 로컬 검증용 PAT 생성과 `.env` 작성
-3. 설정한 Claude 모델의 OpenAI 호환 API와 네이티브 Anthropic API smoke test
-
-MAF 샘플은 기본적으로 실행하지 않습니다. 필요한 경우에만 명시적으로 실행합니다.
-
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-RUN_AGENT=1 scripts/setup_databricks_claude.sh
-```
-
-Windows에서 workspace만 생성하거나 각 단계를 직접 제어하려면
-[Azure Databricks workspace 생성 가이드](docs/azure-databricks-setup.md)를 따르세요.
-
-## 2. 기존 workspace에 Claude Code 연결하기
-
-다음 세 값이 준비되어 있으면 이 경로부터 시작합니다.
-
-| 값 | 예 |
-| --- | --- |
-| Workspace URL | `https://adb-<workspace-id>.<number>.azuredatabricks.net` |
-| 호출 가능한 Claude 모델 ID | Opus 5·4.8, Sonnet 5·4.6, Haiku 4.5의 Databricks endpoint ID |
-| 모델 호출 credential | 빠른 검증은 PAT(legacy), 사용자 장기 사용은 OAuth U2M, 운영 자동화는 OAuth M2M |
-
-- 사전 구성된 Databricks-hosted pay-per-token 모델은 workspace 접근 권한과 유효한
-  token이 필요하며, Foundation Model Unity Catalog 권한 기능을 사용하면 대상
-  `system.ai` 모델의 `EXECUTE`도 필요합니다.
-- 직접 만든 custom/external serving endpoint를 사용한다면 endpoint ACL의 `CAN QUERY`도
-  필요합니다.
-
-Claude Code는 Databricks의 네이티브 Anthropic Messages API에 직접 연결됩니다.
-
-```text
-Claude Code
-  └─ https://<workspace-host>/serving-endpoints/anthropic/v1/messages
-```
-
-### 사용자 전역 설정
-
-macOS/Linux:
-
-```bash
-mkdir -p "$HOME/.claude"
-```
-
 Windows PowerShell:
 
 ```powershell
-New-Item -ItemType Directory -Force -Path "$HOME\.claude" | Out-Null
+git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
+Set-Location claude-on-azure-databricks
+
+az extension add --name databricks --upgrade
+az login
+az account set --subscription '<name-or-id>'
+
+.\scripts\Setup-DatabricksClaude.ps1 `
+  -ResourceGroup my-rg `
+  -Location eastus2 `
+  -Workspace my-workspace
 ```
 
-`~/.claude/settings.json`에 workspace URL, PAT, 모델 ID를 입력합니다.
-Claude Code가 이 파일을 직접 읽어 `/model` 선택기에 최신 Opus·Sonnet 각 2개와 Haiku
-1개를 표시하고 Databricks endpoint로 연결하므로 별도 자동 스크립트는 필요하지 않습니다.
+> Workspace 생성과 Claude 모델 가용성은 별개입니다. 스크립트는 custom endpoint를
+> 배포하지 않으며, 생성된 workspace에서 Databricks-hosted 모델을 실제 호출해 준비 상태를
+> 확인합니다.
 
-가장 쉬운 시작 경로는 PAT입니다. 정적 PAT 저장을 피하려면
-[OAuth U2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-u2m)과
-token 갱신 방식이 필요합니다. OAuth U2M access token은 1시간 동안 유효하므로 단순히
-settings 파일에 복사하는 것만으로는 장기 사용에 적합하지 않습니다. 운영 자동화는
-[OAuth M2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m)을
-사용하세요.
+Claude Code 설정을 변경하지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 추가하세요.
 
-전체 JSON은
-[Claude Code에서 Azure Databricks Claude 사용하기](docs/claude-code-databricks.md)를
-따르세요.
+## 3. 선택 기능
 
-현재 리포에만 적용하려면 같은 JSON을 `.claude/settings.local.json`에 넣습니다.
+| 목적 | 가이드 |
+| --- | --- |
+| 단일 모델만 유지하는 최소 설정 | [단일 모델 최소 설정](docs/claude-code-databricks.md#5-선택-단일-모델-최소-설정) |
+| PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#8-pat-대신-oauth-u2m) |
+| VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#9-vs-code-extension-사용-시) |
+| OpenAI 호환 Chat Completions 경로 확인 | [Microsoft Agent Framework 샘플](docs/agent-framework.md) |
 
-### 연결 확인
-
-```bash
-models=(
-  "databricks-claude-opus-5[1m]"
-  "databricks-claude-opus-4-8[1m]"
-  "databricks-claude-sonnet-5[1m]"
-  "databricks-claude-sonnet-4-6[1m]"
-  "databricks-claude-haiku-4-5"
-)
-
-for model in "${models[@]}"; do
-  claude --model "$model" \
-    -p "Reply with exactly: ${model} OK" \
-    --output-format json
-done
-```
-
-Opus와 Sonnet 4개 모델의 `modelUsage.contextWindow`는 `1000000`, Haiku는
-`200000`이어야 합니다.
-
-대화형으로 실행한 뒤 `/model`에서 검증된 Databricks 모델을 선택할 수 있습니다.
-
-```bash
-claude
-```
-
-## 추가 가이드
-
-- [Microsoft Agent Framework 샘플](docs/agent-framework.md): OpenAI 호환
-  Chat Completions 경로를 확인하는 별도 실습
+MAF는 Claude Code 연결과 독립적인 별도 실습입니다.
 
 ## 보안과 비용
 
-- `.env`나 PAT가 포함된 settings 파일을 Git에 커밋하지 마세요.
-- PAT는 가장 쉬운 로컬 검증 방법이지만 Databricks의 legacy 인증입니다. 사용자 장기
-  사용은 자동 갱신을 포함한 OAuth U2M, 운영 자동화는 서비스 주체 OAuth M2M을
-  사용하세요.
+- PAT나 OAuth access token을 Git에 커밋하지 마세요.
+- PAT는 가장 쉬운 로컬 검증 방법이지만 legacy 인증입니다. 사용자 장기 사용은 OAuth U2M,
+  운영 자동화는 OAuth M2M을 사용하세요.
 - Workspace와 pay-per-token 모델 사용에는 비용이 발생합니다. 실습용 리소스는 사용 후
   [workspace 생성 가이드의 정리 절차](docs/azure-databricks-setup.md#정리)로 삭제하세요.
+- Foundation Model API의 context window와 workspace 요청 한도는 별개입니다.
 
 ## 공식 문서
 
-- [Databricks-hosted foundation models](https://learn.microsoft.com/azure/databricks/machine-learning/foundation-model-apis/supported-models)
 - [Azure Databricks Anthropic Messages API](https://learn.microsoft.com/azure/databricks/machine-learning/model-serving/query-anthropic-messages)
+- [Databricks-hosted foundation models](https://learn.microsoft.com/azure/databricks/machine-learning/foundation-model-apis/supported-models)
 - [Azure Databricks OAuth U2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-u2m)
 - [Azure Databricks personal access tokens](https://learn.microsoft.com/azure/databricks/dev-tools/auth/pat#create-personal-access-tokens-for-workspace-users)
+- [Claude Code LLM gateway 연결](https://code.claude.com/docs/en/llm-gateway-connect)
 - [Claude Code model configuration](https://code.claude.com/docs/en/model-config)

@@ -9,7 +9,8 @@
 #   4. Serving-endpoint verification
 #   5. Model connection test through the supported OpenAI-compatible route,
 #      plus the native Anthropic Messages API for Claude
-#   6. (optional) a full run of src/agent_sample.py against a working endpoint
+#   6. Claude Code multi-model settings
+#   7. (optional) a full run of src/agent_sample.py against a working endpoint
 #
 # Requirements: az with the Databricks extension (logged in: `az login`), curl,
 # and Python 3.10 or newer. RUN_AGENT=1 also requires the project .venv.
@@ -27,10 +28,12 @@ ENDPOINT_EXPLICIT=0
 if [ -n "${ENDPOINT:-}" ] || [ -n "${DATABRICKS_SERVING_ENDPOINT:-}" ]; then
   ENDPOINT_EXPLICIT=1
 fi
-ENDPOINT="${ENDPOINT:-${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-4-8}}"  # target model
+ENDPOINT="${ENDPOINT:-${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-5}}"  # target model
 FALLBACK="${FALLBACK:-databricks-meta-llama-3-3-70b-instruct}"  # proves pipeline
 PAT_LIFETIME_SECONDS="${PAT_LIFETIME_SECONDS:-7776000}"    # 90 days
 ROTATE_PAT="${ROTATE_PAT:-0}"                              # 1 creates a new PAT
+CONFIGURE_CLAUDE_CODE="${CONFIGURE_CLAUDE_CODE:-1}"        # 1 merges Claude Code settings
+CLAUDE_CODE_SCOPE="${CLAUDE_CODE_SCOPE:-user}"             # user or project
 RUN_AGENT="${RUN_AGENT:-0}"                                 # 1 runs the optional MAF sample
 PYTHON="${PYTHON:-python3}"                                 # setup-time Python
 
@@ -41,6 +44,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 AGENT_PY="$ROOT/.venv/bin/python"
+CLAUDE_CONFIGURATOR="$ROOT/scripts/configure_claude_code.py"
 
 c_reset=$'\033[0m'; c_blue=$'\033[1;34m'; c_green=$'\033[1;32m'
 c_yellow=$'\033[1;33m'; c_red=$'\033[1;31m'
@@ -100,7 +104,7 @@ token_validation_code() {
 }
 
 # ---------------------------------------------------------------------------
-log "0/6 Preflight"
+log "0/7 Preflight"
 command -v az >/dev/null || die "az CLI not found. Install Azure CLI and run 'az login'."
 command -v curl >/dev/null || die "curl is required."
 command -v "$PYTHON" >/dev/null || die "Python not found: $PYTHON"
@@ -110,6 +114,16 @@ az extension show --name databricks >/dev/null 2>&1 ||
   die "Azure CLI Databricks extension not found. Run: az extension add --name databricks --upgrade"
 "$PY" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' ||
   die "Python 3.10 or newer is required."
+case "$CONFIGURE_CLAUDE_CODE" in 0|1) ;; *)
+  die "CONFIGURE_CLAUDE_CODE must be 0 or 1."
+esac
+case "$CLAUDE_CODE_SCOPE" in user|project) ;; *)
+  die "CLAUDE_CODE_SCOPE must be 'user' or 'project'."
+esac
+if [ "$CONFIGURE_CLAUDE_CODE" = "1" ]; then
+  [ -f "$CLAUDE_CONFIGURATOR" ] ||
+    die "Claude Code configurator not found: $CLAUDE_CONFIGURATOR"
+fi
 if [ "$RUN_AGENT" = "1" ]; then
   [ -x "$AGENT_PY" ] ||
     die "RUN_AGENT=1 requires .venv. Follow docs/agent-framework.md."
@@ -120,7 +134,7 @@ SUB_NAME="$(az account show --query name -o tsv)"
 ok "az logged in — subscription: $SUB_NAME"
 
 # ---------------------------------------------------------------------------
-log "1/6 Resource group '$RG' ($LOCATION)"
+log "1/7 Resource group '$RG' ($LOCATION)"
 if az group show -n "$RG" >/dev/null 2>&1; then
   ok "resource group already exists"
 else
@@ -129,7 +143,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-log "2/6 Databricks workspace '$WORKSPACE'"
+log "2/7 Databricks workspace '$WORKSPACE'"
 if az databricks workspace show -g "$RG" -n "$WORKSPACE" >/dev/null 2>&1; then
   ok "workspace already exists"
 else
@@ -151,7 +165,7 @@ if [ "${EXISTING_HOST%/}" = "$HOST" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-log "3/6 Databricks PAT + .env"
+log "3/7 Databricks PAT + .env"
 TOKEN=""
 TOKEN_ACTION="created"
 if [ "$ROTATE_PAT" != "1" ] && [ "$EXISTING_CONFIG_MATCHES" = "1" ]; then
@@ -201,7 +215,7 @@ ok ".env written (HOST + $ENDPOINT + $TOKEN_ACTION PAT). PAT length: ${#TOKEN}"
 warn "PAT is the easiest local setup. Consider OAuth U2M or M2M for stronger long-lived security."
 
 # ---------------------------------------------------------------------------
-log "4/6 Verify serving endpoints"
+log "4/7 Verify serving endpoints"
 EP_JSON="$(curl_with_bearer "$TOKEN" -sS "$HOST/api/2.0/serving-endpoints")"
 echo "$EP_JSON" | "$PY" -c "
 import sys,json
@@ -237,7 +251,7 @@ smoke_anthropic() {
     -d "{\"model\":\"$ep\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with exactly: OK\"}],\"max_tokens\":10}"
 }
 
-log "5/6 Model connection test"
+log "5/7 Model connection test"
 WORKING_ENDPOINT=""
 CLAUDE_CODE_READY=0
 CODE="$(smoke "$ENDPOINT")"
@@ -284,7 +298,26 @@ cleanup_smoke_files
 trap - EXIT
 
 # ---------------------------------------------------------------------------
-log "6/6 Optional Agent Framework sample"
+log "6/7 Configure Claude Code"
+CLAUDE_SETTINGS_CONFIGURED=0
+CLAUDE_SETTINGS_FAILED=0
+if [ "$CLAUDE_CODE_READY" = "1" ] && [ "$CONFIGURE_CLAUDE_CODE" = "1" ]; then
+  if DATABRICKS_HOST="$HOST" DATABRICKS_TOKEN="$TOKEN" \
+    "$PY" "$CLAUDE_CONFIGURATOR" --scope "$CLAUDE_CODE_SCOPE"; then
+    CLAUDE_SETTINGS_CONFIGURED=1
+    ok "Claude Code multi-model settings configured (scope: $CLAUDE_CODE_SCOPE)"
+  else
+    CLAUDE_SETTINGS_FAILED=1
+    warn "workspace and model are ready, but Claude Code settings configuration failed"
+  fi
+elif [ "$CONFIGURE_CLAUDE_CODE" = "0" ]; then
+  ok "skipped (CONFIGURE_CLAUDE_CODE=0)"
+else
+  warn "skipped because the native Anthropic route is not ready"
+fi
+
+# ---------------------------------------------------------------------------
+log "7/7 Optional Agent Framework sample"
 if [ "$RUN_AGENT" = "1" ] && [ -n "$WORKING_ENDPOINT" ]; then
   ok "running src/agent_sample.py against '$WORKING_ENDPOINT'"
   echo "" | DATABRICKS_SERVING_ENDPOINT="$WORKING_ENDPOINT" "$AGENT_PY" src/agent_sample.py
@@ -299,10 +332,17 @@ ok "Done. Workspace: $HOST"
 if [ "$WORKING_ENDPOINT" = "$ENDPOINT" ]; then
   ok "OpenAI-compatible route for '$ENDPOINT' is live; .env is ready for optional samples."
   if [ "$CLAUDE_CODE_READY" = "1" ]; then
-    ok "Native Anthropic route is live; follow docs/claude-code-databricks.md to configure Claude Code."
+    if [ "$CLAUDE_SETTINGS_CONFIGURED" = "1" ]; then
+      ok "Claude Code is ready. Run 'claude' and select a Databricks model with /model."
+    else
+      ok "Native Anthropic route is live. Configure Claude Code with scripts/configure_claude_code.py."
+    fi
   else
     warn "Native Anthropic route is not ready; Claude Code is not ready for this model."
   fi
 else
   warn "Claude '$ENDPOINT' is unavailable; review region, cross-Geo, rate limits, permissions, and account capacity."
+fi
+if [ "$CLAUDE_SETTINGS_FAILED" = "1" ]; then
+  die "Fix the existing Claude Code settings and rerun scripts/configure_claude_code.py."
 fi
