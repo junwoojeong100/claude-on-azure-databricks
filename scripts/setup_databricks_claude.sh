@@ -28,7 +28,7 @@ ENDPOINT_EXPLICIT=0
 if [ -n "${ENDPOINT:-}" ] || [ -n "${DATABRICKS_SERVING_ENDPOINT:-}" ]; then
   ENDPOINT_EXPLICIT=1
 fi
-ENDPOINT="${ENDPOINT:-${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-sonnet-5}}"  # target model
+ENDPOINT="${ENDPOINT:-${DATABRICKS_SERVING_ENDPOINT:-databricks-claude-opus-5}}"  # target model
 FALLBACK="${FALLBACK:-databricks-meta-llama-3-3-70b-instruct}"  # proves pipeline
 PAT_LIFETIME_SECONDS="${PAT_LIFETIME_SECONDS:-7776000}"    # 90 days
 ROTATE_PAT="${ROTATE_PAT:-0}"                              # 1 creates a new PAT

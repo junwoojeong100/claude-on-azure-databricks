@@ -81,7 +81,7 @@ def run_workspace_setup_without_venv(
             "    printf '%s\\n' '{\"token_value\":\"dapi-test-token\"}' ;;\n"
             "  */api/2.0/serving-endpoints)\n"
             "    payload='"
-            '{"endpoints":[{"name":"databricks-claude-sonnet-5",'
+            '{"endpoints":[{"name":"databricks-claude-opus-5",'
             '"state":{"ready":"READY"}}]}'
             "'\n"
             '    if [ "$write_out" = "%{http_code}" ]; then\n'
@@ -159,7 +159,7 @@ class WorkspaceSetupTests(unittest.TestCase):
         self.assertIn("DATABRICKS_TOKEN=dapi-test-token", env_text)
         self.assertIsNotNone(settings_text)
         self.assertIn(
-            '"model": "databricks-claude-sonnet-5[1m]"',
+            '"model": "databricks-claude-opus-5[1m]"',
             settings_text,
         )
         self.assertIn("Claude Code is ready", result.stdout)
@@ -177,7 +177,7 @@ class WorkspaceSetupTests(unittest.TestCase):
     def test_existing_pat_is_reused_through_serving_api_validation(self) -> None:
         existing_env = (
             "DATABRICKS_HOST=https://adb-1234567890123456.7.azuredatabricks.net\n"
-            "DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-5\n"
+            "DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-5\n"
             "DATABRICKS_TOKEN=dapi-existing-token\n"
         )
 
@@ -193,7 +193,7 @@ class WorkspaceSetupTests(unittest.TestCase):
     def test_invalid_existing_pat_is_replaced(self) -> None:
         existing_env = (
             "DATABRICKS_HOST=https://adb-1234567890123456.7.azuredatabricks.net\n"
-            "DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-5\n"
+            "DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-5\n"
             "DATABRICKS_TOKEN=dapi-expired-token\n"
         )
 
@@ -213,7 +213,7 @@ class WorkspaceSetupTests(unittest.TestCase):
     def test_unexpected_pat_validation_failure_stops_setup(self) -> None:
         existing_env = (
             "DATABRICKS_HOST=https://adb-1234567890123456.7.azuredatabricks.net\n"
-            "DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-5\n"
+            "DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-5\n"
             "DATABRICKS_TOKEN=dapi-existing-token\n"
         )
 

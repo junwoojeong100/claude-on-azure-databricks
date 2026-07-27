@@ -24,10 +24,10 @@ Claude Code
 | --- | --- |
 | Workspace host | `adb-1234567890123456.7.azuredatabricks.net` |
 | Databricks credential | 빠른 검증은 PAT, 장기 사용자 인증은 OAuth U2M |
-| 호출 가능한 모델 ID 하나 | `databricks-claude-sonnet-5` |
+| 호출 가능한 모델 ID 하나 | `databricks-claude-opus-5` |
 | 로컬 도구 | Git, Python 3.10 이상, 최신 Claude Code |
 
-첫 API 검증에는 모델 하나만 선택하세요. 아래 예시는 현재 기본 모델인 Sonnet 5를
+첫 API 검증에는 모델 하나만 선택하세요. 아래 예시는 현재 기본 모델인 Opus 5를
 사용합니다.
 
 권한:
@@ -63,7 +63,7 @@ Claude Code 설정을 만들기 전에 네이티브 Anthropic API를 직접 호�
 ```bash
 export ANTHROPIC_BASE_URL="https://<workspace-host>/serving-endpoints/anthropic"
 export ANTHROPIC_AUTH_TOKEN="<databricks-token>"
-export DATABRICKS_MODEL="databricks-claude-sonnet-5"
+export DATABRICKS_MODEL="databricks-claude-opus-5"
 
 curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
   -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
@@ -77,7 +77,7 @@ curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
 ```powershell
 $env:ANTHROPIC_BASE_URL = 'https://<workspace-host>/serving-endpoints/anthropic'
 $env:ANTHROPIC_AUTH_TOKEN = '<databricks-token>'
-$env:DATABRICKS_MODEL = 'databricks-claude-sonnet-5'
+$env:DATABRICKS_MODEL = 'databricks-claude-opus-5'
 
 $Body = @{
     model = $env:DATABRICKS_MODEL
@@ -113,7 +113,7 @@ Databricks API 호출이 성공한 같은 터미널에서 Claude Code를 실행�
 ```bash
 export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1
 
-claude --model "databricks-claude-sonnet-5[1m]" \
+claude --model "databricks-claude-opus-5[1m]" \
   -p "Reply with exactly: CLAUDE CODE OK" \
   --output-format json
 ```
@@ -123,12 +123,12 @@ claude --model "databricks-claude-sonnet-5[1m]" \
 ```powershell
 $env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = '1'
 
-claude --model 'databricks-claude-sonnet-5[1m]' `
+claude --model 'databricks-claude-opus-5[1m]' `
     -p 'Reply with exactly: CLAUDE CODE OK' `
     --output-format json
 ```
 
-`is_error`가 `false`이고 `modelUsage`에 `databricks-claude-sonnet-5`가 표시되어야
+`is_error`가 `false`이고 `modelUsage`에 `databricks-claude-opus-5`가 표시되어야
 합니다. 이 모델의 `contextWindow`는 `1000000`이어야 합니다.
 
 대화형으로 실행한 뒤 `/status`를 열어 실제 routing도 확인합니다.
@@ -180,7 +180,7 @@ py -3 scripts\configure_claude_code.py
       "WebSearch"
     ]
   },
-  "model": "databricks-claude-sonnet-5[1m]",
+  "model": "databricks-claude-opus-5[1m]",
   "env": {
     "ANTHROPIC_BASE_URL": "https://<workspace-host>/serving-endpoints/anthropic",
     "ANTHROPIC_AUTH_TOKEN": "<databricks-token>",
@@ -274,7 +274,7 @@ $models | ForEach-Object {
       "WebSearch"
     ]
   },
-  "model": "databricks-claude-sonnet-5[1m]",
+  "model": "databricks-claude-opus-5[1m]",
   "env": {
     "ANTHROPIC_BASE_URL": "https://<workspace-host>/serving-endpoints/anthropic",
     "ANTHROPIC_AUTH_TOKEN": "<databricks-token>",

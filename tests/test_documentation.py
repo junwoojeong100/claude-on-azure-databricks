@@ -149,7 +149,7 @@ class DocumentationTests(unittest.TestCase):
         settings = next(
             value
             for value in json_settings
-            if value.get("model") == "databricks-claude-sonnet-5[1m]"
+            if value.get("model") == "databricks-claude-opus-5[1m]"
             and "ANTHROPIC_DEFAULT_OPUS_MODEL" in value.get("env", {})
         )
         self.assertNotIn("availableModels", settings)
@@ -186,7 +186,7 @@ class DocumentationTests(unittest.TestCase):
         minimal_settings = next(
             value
             for value in json_settings
-            if value.get("model") == "databricks-claude-sonnet-5[1m]"
+            if value.get("model") == "databricks-claude-opus-5[1m]"
             and "ANTHROPIC_DEFAULT_OPUS_MODEL" not in value.get("env", {})
         )
         self.assertEqual(
@@ -214,7 +214,7 @@ class DocumentationTests(unittest.TestCase):
             guide.index('"ANTHROPIC_DEFAULT_OPUS_MODEL"'),
         )
 
-    def test_default_model_is_sonnet_5_across_guides_and_setup(self) -> None:
+    def test_default_model_is_opus_5_across_guides_and_setup(self) -> None:
         paths = (
             ROOT / ".env.example",
             ROOT / "README.md",
@@ -226,11 +226,28 @@ class DocumentationTests(unittest.TestCase):
         for path in paths:
             text = path.read_text(encoding="utf-8")
             with self.subTest(path=path.relative_to(ROOT)):
-                self.assertIn("databricks-claude-sonnet-5", text)
+                self.assertIn("databricks-claude-opus-5", text)
                 self.assertNotIn(
                     "DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8",
                     text,
                 )
+
+    def test_powershell_bootstrap_covers_full_customer_path(self) -> None:
+        script = (ROOT / "scripts" / "Setup-DatabricksClaude.ps1").read_text(
+            encoding="utf-8"
+        )
+
+        for required_text in (
+            "databricks-claude-opus-5",
+            "'databricks', 'workspace', 'create'",
+            "/api/2.0/token/create",
+            "/serving-endpoints/anthropic/v1/messages",
+            "anthropic-version",
+            "Protect-File",
+            "configure_claude_code.py",
+            "Claude Code is ready",
+        ):
+            self.assertIn(required_text, script)
 
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}

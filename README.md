@@ -18,9 +18,9 @@ Microsoft Agent Framework(MAF)는 첫 연결에 필요하지 않습니다.
 | --- | --- |
 | Workspace URL | `https://adb-<workspace-id>.<number>.azuredatabricks.net` |
 | Databricks credential | 빠른 검증은 PAT, 장기 사용자 인증은 OAuth U2M |
-| 호출 가능한 Claude 모델 ID 하나 | `databricks-claude-sonnet-5` |
+| 호출 가능한 Claude 모델 ID 하나 | `databricks-claude-opus-5` |
 
-아래 예시는 현재 기본 모델인 Sonnet 5를 사용합니다. Workspace에서 다른 모델만 사용할
+아래 예시는 현재 기본 모델인 Opus 5를 사용합니다. Workspace에서 다른 모델만 사용할
 수 있다면 `DATABRICKS_MODEL`을 실제 모델 ID로 바꾸세요. 설정 자동화에는 Git과
 Python 3.10 이상이 필요합니다.
 
@@ -34,7 +34,7 @@ cd claude-on-azure-databricks
 
 export ANTHROPIC_BASE_URL="https://<workspace-host>/serving-endpoints/anthropic"
 export ANTHROPIC_AUTH_TOKEN="<databricks-token>"
-export DATABRICKS_MODEL="databricks-claude-sonnet-5"
+export DATABRICKS_MODEL="databricks-claude-opus-5"
 
 curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
   -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
@@ -56,7 +56,7 @@ Windows PowerShell을 포함한 전체 명령은
 ```bash
 export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1
 
-claude --model "databricks-claude-sonnet-5[1m]" \
+claude --model "databricks-claude-opus-5[1m]" \
   -p "Reply with exactly: CLAUDE CODE OK" \
   --output-format json
 ```
@@ -83,7 +83,7 @@ py -3 scripts\configure_claude_code.py
 
 도구는 기존 `~/.claude/settings.json`을 백업하고 관련 키만 병합합니다. 백업은 최신
 1개만 유지합니다. `/model` picker에는 Opus·Sonnet 각 2개와 Haiku 1개가 바로 표시되며
-기본 모델은 Sonnet 5입니다. 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
+기본 모델은 Opus 5입니다. 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
 
 ## 2. Workspace가 없다면
 
@@ -104,6 +104,22 @@ az account set --subscription "<name-or-id>"
 
 RG=my-rg LOCATION=eastus2 WORKSPACE=my-workspace \
   scripts/setup_databricks_claude.sh
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
+Set-Location claude-on-azure-databricks
+
+az extension add --name databricks --upgrade
+az login
+az account set --subscription '<name-or-id>'
+
+.\scripts\Setup-DatabricksClaude.ps1 `
+  -ResourceGroup my-rg `
+  -Location eastus2 `
+  -Workspace my-workspace
 ```
 
 > Workspace 생성과 Claude 모델 가용성은 별개입니다. 스크립트는 custom endpoint를

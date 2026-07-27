@@ -40,7 +40,7 @@ cross-Geo 대상으로 표시되지만 Sonnet 5는 현재 리전 표에 없습�
 [Claude Code 연결 가이드](claude-code-databricks.md#4-다중-모델-영구-설정)의 기본
 다중 모델 구성을 적용하세요.
 
-## 1. 자동 생성: macOS, Linux, WSL
+## 1. 자동 생성
 
 자동 스크립트는 workspace를 만든 뒤 빠른 로컬 검증용 PAT와 `.env`까지
 준비합니다.
@@ -55,6 +55,15 @@ cd claude-on-azure-databricks
 python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else "Python 3.10+ required")'
 ```
 
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
+Set-Location claude-on-azure-databricks
+
+py -3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else "Python 3.10+ required")'
+```
+
 ### Azure 로그인
 
 ```bash
@@ -65,12 +74,25 @@ az account set --subscription "<name-or-id>"
 
 ### Workspace 생성
 
+macOS, Linux, WSL:
+
 ```bash
 RG=my-rg LOCATION=eastus2 WORKSPACE=my-workspace \
   scripts/setup_databricks_claude.sh
 ```
 
+Windows PowerShell:
+
+```powershell
+.\scripts\Setup-DatabricksClaude.ps1 `
+  -ResourceGroup my-rg `
+  -Location eastus2 `
+  -Workspace my-workspace
+```
+
 환경변수를 생략하면 다음 기본값을 사용합니다.
+PowerShell에서는 `-ResourceGroup`, `-Location`, `-Workspace` 같은 parameter로 같은
+값을 직접 지정할 수 있습니다.
 
 | 변수 | 기본값 | 역할 |
 | --- | --- | --- |
@@ -78,7 +100,7 @@ RG=my-rg LOCATION=eastus2 WORKSPACE=my-workspace \
 | `LOCATION` | `eastus2` | Azure 리전 |
 | `WORKSPACE` | `ws-databricks-claude` | Databricks workspace |
 | `SKU` | `premium` | Workspace SKU |
-| `DATABRICKS_SERVING_ENDPOINT` | `databricks-claude-sonnet-5` | 검증할 기본 Claude 모델 |
+| `DATABRICKS_SERVING_ENDPOINT` | `databricks-claude-opus-5` | 검증할 기본 Claude 모델 |
 | `CONFIGURE_CLAUDE_CODE` | `1` | 성공 시 Claude Code 다중 모델 설정 병합 |
 | `CLAUDE_CODE_SCOPE` | `user` | `user` 또는 `project` 설정 범위 |
 | `RUN_AGENT` | `0` | 선택 MAF 샘플 실행 여부 |
@@ -98,7 +120,7 @@ OpenAI 호환 경로만 성공하고 네이티브 Anthropic 경로가 실패하�
 
 ```dotenv
 DATABRICKS_HOST=https://<workspace-host>
-DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-5
+DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-5
 DATABRICKS_TOKEN=<databricks-token>
 ```
 

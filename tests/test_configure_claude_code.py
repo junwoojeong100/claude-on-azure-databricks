@@ -53,7 +53,7 @@ class ConfigureClaudeCodeTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
-            self.assertEqual(settings["model"], "databricks-claude-sonnet-5[1m]")
+            self.assertEqual(settings["model"], "databricks-claude-opus-5[1m]")
             self.assertEqual(
                 settings["env"]["ANTHROPIC_BASE_URL"],
                 "https://adb-1234567890123456.7.azuredatabricks.net"

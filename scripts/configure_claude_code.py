@@ -16,7 +16,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-DEFAULT_MODEL = "databricks-claude-sonnet-5[1m]"
+DEFAULT_MODEL = "databricks-claude-opus-5[1m]"
+DEFAULT_SONNET_MODEL = "databricks-claude-sonnet-5[1m]"
 ANTHROPIC_PATH = "/serving-endpoints/anthropic"
 MODEL_ENV = {
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-5[1m]",
@@ -25,7 +26,7 @@ MODEL_ENV = {
     "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-4-8[1m]",
     "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 4.8 (1M context)",
     "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": DEFAULT_MODEL,
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": DEFAULT_SONNET_MODEL,
     "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5 (1M context)",
     "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Custom Sonnet model (1M context)",
     "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-4-6[1m]",
