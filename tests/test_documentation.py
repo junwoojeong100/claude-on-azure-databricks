@@ -85,6 +85,7 @@ class DocumentationTests(unittest.TestCase):
             readme.index("### 2. Claude Code에서 확인"),
             readme.index("### 3. 다중 모델 설정 저장"),
         )
+        self.assertIn("scripts/configure_claude_code.py", readme)
 
     def test_all_guides_are_linked_from_readme(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -124,6 +125,7 @@ class DocumentationTests(unittest.TestCase):
             "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
             "WebSearch",
             "apiKeyHelper",
+            "scripts/configure_claude_code.py",
             "scripts/get_databricks_oauth_token.sh",
             "Get-DatabricksOAuthToken.ps1",
             "claudeCode.environmentVariables",
@@ -148,6 +150,7 @@ class DocumentationTests(unittest.TestCase):
             value
             for value in json_settings
             if value.get("model") == "databricks-claude-sonnet-5[1m]"
+            and "ANTHROPIC_DEFAULT_OPUS_MODEL" in value.get("env", {})
         )
         self.assertNotIn("availableModels", settings)
         self.assertNotIn("enforceAvailableModels", settings)
@@ -183,7 +186,7 @@ class DocumentationTests(unittest.TestCase):
         minimal_settings = next(
             value
             for value in json_settings
-            if value.get("model") == "databricks-claude-sonnet-4-6[1m]"
+            if value.get("model") == "databricks-claude-sonnet-5[1m]"
             and "ANTHROPIC_DEFAULT_OPUS_MODEL" not in value.get("env", {})
         )
         self.assertEqual(
@@ -206,6 +209,28 @@ class DocumentationTests(unittest.TestCase):
 
         self.assertLess(guide.index(api_heading), guide.index(cli_heading))
         self.assertLess(guide.index(cli_heading), guide.index(settings_heading))
+        self.assertLess(
+            guide.index("scripts/configure_claude_code.py"),
+            guide.index('"ANTHROPIC_DEFAULT_OPUS_MODEL"'),
+        )
+
+    def test_default_model_is_sonnet_5_across_guides_and_setup(self) -> None:
+        paths = (
+            ROOT / ".env.example",
+            ROOT / "README.md",
+            ROOT / "docs" / "agent-framework.md",
+            ROOT / "docs" / "azure-databricks-setup.md",
+            ROOT / "scripts" / "setup_databricks_claude.sh",
+        )
+
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            with self.subTest(path=path.relative_to(ROOT)):
+                self.assertIn("databricks-claude-sonnet-5", text)
+                self.assertNotIn(
+                    "DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8",
+                    text,
+                )
 
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}

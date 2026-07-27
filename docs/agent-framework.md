@@ -8,7 +8,7 @@ Databricks의 Claude 모델을 호출합니다. Workspace 생성과 Claude Code 
 Agent Framework
   └─ OpenAI Chat Completions
       └─ https://<workspace-host>/serving-endpoints/chat/completions
-          └─ model: databricks-claude-opus-4-8
+          └─ model: databricks-claude-sonnet-5
 ```
 
 Databricks의 이 경로는 Chat Completions API이므로, Agent Framework에서 Responses
@@ -24,7 +24,7 @@ Databricks의 이 경로는 Chat Completions API이므로, Agent Framework에서
 
 ```dotenv
 DATABRICKS_HOST=https://<workspace-host>
-DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8
+DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-5
 DATABRICKS_TOKEN=<PAT-or-OAuth-access-token>
 ```
 
@@ -86,7 +86,7 @@ Windows PowerShell:
 빈 줄 또는 Ctrl-D를 입력하면 종료하고 세션 합계를 출력합니다.
 
 ```text
-Databricks agent (databricks-claude-opus-4-8) — 대화를 시작합니다.
+Databricks agent (databricks-claude-sonnet-5) — 대화를 시작합니다.
 
 [User] Azure Databricks Model Serving이 무엇인지 한 문단으로 설명해줘.  (sample)
 [Agent] ...
@@ -113,7 +113,7 @@ client = OpenAIChatCompletionClient(
 ```
 
 OpenAI SDK가 `chat/completions`를 붙이고, 요청의 `model`에는
-`databricks-claude-opus-4-8` 같은 Databricks endpoint 이름이 들어갑니다.
+`databricks-claude-sonnet-5` 같은 Databricks endpoint 이름이 들어갑니다.
 
 ### 2. 다중 턴 메시지의 `name` 필드만 제거
 

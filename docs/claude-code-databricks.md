@@ -24,9 +24,11 @@ Claude Code
 | --- | --- |
 | Workspace host | `adb-1234567890123456.7.azuredatabricks.net` |
 | Databricks credential | 빠른 검증은 PAT, 장기 사용자 인증은 OAuth U2M |
-| 호출 가능한 모델 ID 하나 | `databricks-claude-sonnet-4-6` |
+| 호출 가능한 모델 ID 하나 | `databricks-claude-sonnet-5` |
+| 로컬 도구 | Git, Python 3.10 이상, 최신 Claude Code |
 
-첫 API 검증에는 모델 하나만 선택하세요. 아래 예시는 Sonnet 4.6을 사용합니다.
+첫 API 검증에는 모델 하나만 선택하세요. 아래 예시는 현재 기본 모델인 Sonnet 5를
+사용합니다.
 
 권한:
 
@@ -61,7 +63,7 @@ Claude Code 설정을 만들기 전에 네이티브 Anthropic API를 직접 호�
 ```bash
 export ANTHROPIC_BASE_URL="https://<workspace-host>/serving-endpoints/anthropic"
 export ANTHROPIC_AUTH_TOKEN="<databricks-token>"
-export DATABRICKS_MODEL="databricks-claude-sonnet-4-6"
+export DATABRICKS_MODEL="databricks-claude-sonnet-5"
 
 curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
   -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
@@ -75,7 +77,7 @@ curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
 ```powershell
 $env:ANTHROPIC_BASE_URL = 'https://<workspace-host>/serving-endpoints/anthropic'
 $env:ANTHROPIC_AUTH_TOKEN = '<databricks-token>'
-$env:DATABRICKS_MODEL = 'databricks-claude-sonnet-4-6'
+$env:DATABRICKS_MODEL = 'databricks-claude-sonnet-5'
 
 $Body = @{
     model = $env:DATABRICKS_MODEL
@@ -111,7 +113,7 @@ Databricks API 호출이 성공한 같은 터미널에서 Claude Code를 실행�
 ```bash
 export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1
 
-claude --model "databricks-claude-sonnet-4-6[1m]" \
+claude --model "databricks-claude-sonnet-5[1m]" \
   -p "Reply with exactly: CLAUDE CODE OK" \
   --output-format json
 ```
@@ -121,12 +123,12 @@ claude --model "databricks-claude-sonnet-4-6[1m]" \
 ```powershell
 $env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = '1'
 
-claude --model 'databricks-claude-sonnet-4-6[1m]' `
+claude --model 'databricks-claude-sonnet-5[1m]' `
     -p 'Reply with exactly: CLAUDE CODE OK' `
     --output-format json
 ```
 
-`is_error`가 `false`이고 `modelUsage`에 `databricks-claude-sonnet-4-6`이 표시되어야
+`is_error`가 `false`이고 `modelUsage`에 `databricks-claude-sonnet-5`가 표시되어야
 합니다. 이 모델의 `contextWindow`는 `1000000`이어야 합니다.
 
 대화형으로 실행한 뒤 `/status`를 열어 실제 routing도 확인합니다.
@@ -143,12 +145,33 @@ claude
 
 ## 4. 다중 모델 영구 설정
 
-임시 검증이 성공한 후에만 설정을 저장합니다. 사용자 전역 설정은
-`~/.claude/settings.json`, 현재 프로젝트 전용 설정은
-`.claude/settings.local.json`입니다.
+임시 검증이 성공한 같은 터미널에서 리포의 설정 도구를 실행합니다.
 
-다음 기본 JSON은 `/model` picker에 최신 Opus와 Sonnet 각 2개, Haiku 1개를 처음부터
-표시합니다.
+macOS, Linux, WSL:
+
+```bash
+python3 scripts/configure_claude_code.py
+```
+
+Windows PowerShell:
+
+```powershell
+py -3 scripts\configure_claude_code.py
+```
+
+도구는 앞 단계의 `ANTHROPIC_BASE_URL`과 `ANTHROPIC_AUTH_TOKEN`을 읽고 다음 작업을
+수행합니다.
+
+1. 기존 `~/.claude/settings.json`을 `.bak.<timestamp>`로 백업하고 최신 1개만 유지
+2. unrelated settings를 유지하면서 Databricks routing과 picker 키만 병합
+3. 충돌하는 provider routing 키 제거
+4. macOS/Linux/WSL은 `0600`, Windows는 `icacls`로 현재 사용자만 수정하도록 제한
+
+현재 프로젝트에만 적용하려면 `--scope project`를 추가합니다. 이 경우
+`.claude/settings.local.json`에 저장됩니다.
+
+도구가 생성하는 기본 설정은 `/model` picker에 최신 Opus와 Sonnet 각 2개, Haiku 1개를
+처음부터 표시합니다.
 
 ```json
 {
@@ -197,28 +220,8 @@ Workspace에서 일부 모델만 호출할 수 있다면 해당 `ANTHROPIC_DEFAU
 `ANTHROPIC_CUSTOM_MODEL_OPTION*` 항목만 제거하세요. 다른 사용자의 설정에는 영향을 주지
 않습니다.
 
-기존 settings 파일이 있다면 파일 전체를 덮어쓰지 말고 `permissions`, `model`, `env`
-키를 병합하세요. Claude Code를 완전히 종료한 뒤 다시 시작해야 변경이 적용됩니다.
-
-macOS/Linux:
-
-```bash
-mkdir -p "$HOME/.claude"
-chmod 700 "$HOME/.claude"
-chmod 600 "$HOME/.claude/settings.json"
-```
-
-Windows PowerShell:
-
-```powershell
-New-Item -ItemType Directory -Force -Path "$HOME\.claude" | Out-Null
-icacls "$HOME\.claude\settings.json" `
-  /inheritance:r /grant:r "${env:USERNAME}:(M)" | Out-Null
-```
-
-현재 리포에서만 Databricks를 사용하려면 같은 JSON을
-`.claude/settings.local.json`에 저장하세요. 이 리포의 `.gitignore`에는 해당 파일이
-포함되어 있습니다.
+Claude Code를 완전히 종료한 뒤 다시 시작해야 picker 항목이 갱신됩니다. JSON을
+수동으로 관리하려면 기존 파일 전체를 덮어쓰지 말고 위 키만 병합하세요.
 
 설정 후 다섯 모델을 한 번에 확인합니다.
 
@@ -271,7 +274,7 @@ $models | ForEach-Object {
       "WebSearch"
     ]
   },
-  "model": "databricks-claude-sonnet-4-6[1m]",
+  "model": "databricks-claude-sonnet-5[1m]",
   "env": {
     "ANTHROPIC_BASE_URL": "https://<workspace-host>/serving-endpoints/anthropic",
     "ANTHROPIC_AUTH_TOKEN": "<databricks-token>",
@@ -321,6 +324,10 @@ Databricks OAuth U2M은 access token을 자동으로 갱신할 수 있습니다.
 Databricks CLI의 token cache를 Claude Code `apiKeyHelper`와 연결하는 helper를
 제공합니다.
 
+`databricks auth` 명령이 없다면 먼저
+[Databricks CLI](https://learn.microsoft.com/azure/databricks/dev-tools/cli/install)를
+설치하세요.
+
 ### 1. Databricks CLI 로그인
 
 ```bash
@@ -331,7 +338,26 @@ databricks auth login \
 
 브라우저 로그인을 마치면 `claude-code` profile에 OAuth U2M 인증 정보가 저장됩니다.
 
-### 2. Helper 직접 확인
+### 2. OAuth 다중 모델 설정
+
+macOS, Linux, WSL:
+
+```bash
+export DATABRICKS_HOST="https://<workspace-host>"
+python3 scripts/configure_claude_code.py --auth oauth
+```
+
+Windows PowerShell:
+
+```powershell
+$env:DATABRICKS_HOST = 'https://<workspace-host>'
+py -3 scripts\configure_claude_code.py --auth oauth
+```
+
+설정 도구는 기존 파일을 백업하고 PAT를 제거한 뒤 OS에 맞는 `apiKeyHelper`,
+`DATABRICKS_CONFIG_PROFILE=claude-code`, 다중 모델 picker를 병합합니다.
+
+### 3. Helper 직접 확인
 
 macOS, Linux, WSL:
 
@@ -348,54 +374,8 @@ $env:DATABRICKS_CONFIG_PROFILE = 'claude-code'
 ```
 
 두 helper 모두 현재 access token만 stdout으로 출력합니다. Claude Code는 helper 결과를
-기본 5분 동안 cache하고 `401` 응답을 받으면 다시 실행합니다.
-Bash helper는 token JSON을 읽기 위해 Python 3을 사용합니다.
-
-### 3. Claude Code settings
-
-PAT가 포함된 `ANTHROPIC_AUTH_TOKEN`을 제거하고 `apiKeyHelper`를 사용합니다.
-
-macOS, Linux, WSL:
-
-```json
-{
-  "apiKeyHelper": "/absolute/path/to/claude-on-azure-databricks/scripts/get_databricks_oauth_token.sh",
-  "model": "databricks-claude-sonnet-5[1m]",
-  "permissions": {
-    "deny": [
-      "WebSearch"
-    ]
-  },
-  "env": {
-    "ANTHROPIC_BASE_URL": "https://<workspace-host>/serving-endpoints/anthropic",
-    "DATABRICKS_CONFIG_PROFILE": "claude-code",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-5[1m]",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus 5 (1M context)",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-4-8[1m]",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 4.8 (1M context)",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "databricks-claude-sonnet-5[1m]",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5 (1M context)",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Custom Sonnet model (1M context)",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-4-6[1m]",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Sonnet 4.6 (1M context)",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Custom Sonnet model (1M context)",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-4-5",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku 4.5 (200K context)",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Custom Haiku model (200K context)",
-    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
-  }
-}
-```
-
-Windows에서는 `apiKeyHelper` 값을 다음처럼 설정합니다.
-
-```json
-{
-  "apiKeyHelper": "powershell -NoProfile -File C:\\absolute\\path\\scripts\\Get-DatabricksOAuthToken.ps1"
-}
-```
+기본 5분 동안 cache하고 `401` 응답을 받으면 다시 실행합니다. Bash helper는 token JSON을
+읽기 위해 Python 3을 사용합니다.
 
 운영 자동화는 사용자 브라우저 로그인이 필요한 U2M 대신 OAuth M2M을 사용하세요. M2M은
 조직의 credential provider나 vault에서 access token을 반환하는 별도 `apiKeyHelper`와

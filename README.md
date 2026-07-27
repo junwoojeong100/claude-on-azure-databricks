@@ -18,19 +18,23 @@ Microsoft Agent Framework(MAF)는 첫 연결에 필요하지 않습니다.
 | --- | --- |
 | Workspace URL | `https://adb-<workspace-id>.<number>.azuredatabricks.net` |
 | Databricks credential | 빠른 검증은 PAT, 장기 사용자 인증은 OAuth U2M |
-| 호출 가능한 Claude 모델 ID 하나 | `databricks-claude-sonnet-4-6` |
+| 호출 가능한 Claude 모델 ID 하나 | `databricks-claude-sonnet-5` |
 
-아래 예시는 Sonnet 4.6을 사용합니다. Workspace에서 다른 모델만 사용할 수 있다면
-`DATABRICKS_MODEL`을 실제 모델 ID로 바꾸세요.
+아래 예시는 현재 기본 모델인 Sonnet 5를 사용합니다. Workspace에서 다른 모델만 사용할
+수 있다면 `DATABRICKS_MODEL`을 실제 모델 ID로 바꾸세요. 설정 자동화에는 Git과
+Python 3.10 이상이 필요합니다.
 
 ### 1. Databricks API부터 확인
 
 macOS, Linux 또는 WSL:
 
 ```bash
+git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
+cd claude-on-azure-databricks
+
 export ANTHROPIC_BASE_URL="https://<workspace-host>/serving-endpoints/anthropic"
 export ANTHROPIC_AUTH_TOKEN="<databricks-token>"
-export DATABRICKS_MODEL="databricks-claude-sonnet-4-6"
+export DATABRICKS_MODEL="databricks-claude-sonnet-5"
 
 curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
   -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
@@ -52,7 +56,7 @@ Windows PowerShell을 포함한 전체 명령은
 ```bash
 export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1
 
-claude --model "databricks-claude-sonnet-4-6[1m]" \
+claude --model "databricks-claude-sonnet-5[1m]" \
   -p "Reply with exactly: CLAUDE CODE OK" \
   --output-format json
 ```
@@ -65,12 +69,21 @@ claude --model "databricks-claude-sonnet-4-6[1m]" \
 
 ### 3. 다중 모델 설정 저장
 
-임시 검증이 끝난 뒤
-[다중 모델 영구 설정](docs/claude-code-databricks.md#4-다중-모델-영구-설정)을
-`~/.claude/settings.json`에 저장하세요. 기본 예시는 `/model` picker에 Opus·Sonnet 각
-2개와 Haiku 1개를 바로 표시합니다.
+임시 검증이 끝난 같은 터미널에서 설정 도구를 실행합니다.
 
-Workspace에서 호출할 수 없는 모델이 있다면 해당 mapping만 제거하면 됩니다.
+```bash
+python3 scripts/configure_claude_code.py
+```
+
+Windows PowerShell:
+
+```powershell
+py -3 scripts\configure_claude_code.py
+```
+
+도구는 기존 `~/.claude/settings.json`을 백업하고 관련 키만 병합합니다. 백업은 최신
+1개만 유지합니다. `/model` picker에는 Opus·Sonnet 각 2개와 Haiku 1개가 바로 표시되며
+기본 모델은 Sonnet 5입니다. 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
 
 ## 2. Workspace가 없다면
 
@@ -78,7 +91,8 @@ Workspace에서 호출할 수 없는 모델이 있다면 해당 mapping만 제�
 [Azure Databricks workspace 생성 가이드](docs/azure-databricks-setup.md)를 사용합니다.
 
 macOS, Linux 또는 WSL에서는 다음 스크립트가 리소스 그룹과 Premium classic workspace를
-만들고, PAT와 네이티브 Anthropic API 연결을 검증합니다.
+만들고, PAT와 네이티브 Anthropic API를 검증한 뒤 Claude Code 다중 모델 설정까지
+완료합니다.
 
 ```bash
 git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
@@ -95,6 +109,8 @@ RG=my-rg LOCATION=eastus2 WORKSPACE=my-workspace \
 > Workspace 생성과 Claude 모델 가용성은 별개입니다. 스크립트는 custom endpoint를
 > 배포하지 않으며, 생성된 workspace에서 Databricks-hosted 모델을 실제 호출해 준비 상태를
 > 확인합니다.
+
+Claude Code 설정을 변경하지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 추가하세요.
 
 ## 3. 선택 기능
 
