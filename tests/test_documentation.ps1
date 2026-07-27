@@ -31,6 +31,21 @@ foreach ($MarkdownFile in $MarkdownFiles) {
     }
 }
 
+foreach ($PowerShellScript in Get-ChildItem (Join-Path $RepoRoot 'scripts') -Filter '*.ps1') {
+    $ScriptTokens = $null
+    $ScriptErrors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile(
+        $PowerShellScript.FullName,
+        [ref]$ScriptTokens,
+        [ref]$ScriptErrors
+    ) | Out-Null
+    if ($ScriptErrors.Count) {
+        $Details = ($ScriptErrors | ForEach-Object { $_.Message }) -join '; '
+        $RelativePath = Resolve-Path -Relative $PowerShellScript
+        throw "${RelativePath} PowerShell parse error(s): $Details"
+    }
+}
+
 if (-not $PowerShellFenceCount) {
     throw 'No PowerShell documentation fences were found.'
 }

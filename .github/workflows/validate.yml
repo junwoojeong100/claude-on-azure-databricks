@@ -25,7 +25,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate PowerShell documentation
+      - name: Validate PowerShell
         shell: pwsh
         run: ./tests/test_documentation.ps1
 

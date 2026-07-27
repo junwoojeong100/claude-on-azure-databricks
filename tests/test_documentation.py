@@ -67,17 +67,24 @@ def fenced_blocks(path: Path) -> list[tuple[str, str, int]]:
 
 
 class DocumentationTests(unittest.TestCase):
-    def test_readme_separates_workspace_and_claude_code_paths(self) -> None:
+    def test_readme_leads_with_existing_workspace_quickstart(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        workspace_heading = "## 1. Azure Databricks workspace 만들기"
-        claude_code_heading = "## 2. 기존 workspace에 Claude Code 연결하기"
+        quickstart_heading = "## 1. 5분 연결: 기존 workspace에 Claude Code 연결"
+        workspace_heading = "## 2. Workspace가 없다면"
 
+        self.assertIn(quickstart_heading, readme)
         self.assertIn(workspace_heading, readme)
-        self.assertIn(claude_code_heading, readme)
         self.assertLess(
-            readme.index(workspace_heading), readme.index(claude_code_heading)
+            readme.index(quickstart_heading), readme.index(workspace_heading)
         )
-        self.assertNotIn("## 가장 빠른 전체 실습", readme)
+        self.assertLess(
+            readme.index("### 1. Databricks API부터 확인"),
+            readme.index("### 2. Claude Code에서 확인"),
+        )
+        self.assertLess(
+            readme.index("### 2. Claude Code에서 확인"),
+            readme.index("### 3. 다중 모델 설정 저장"),
+        )
 
     def test_all_guides_are_linked_from_readme(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -117,21 +124,31 @@ class DocumentationTests(unittest.TestCase):
             "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
             "WebSearch",
             "apiKeyHelper",
+            "scripts/get_databricks_oauth_token.sh",
+            "Get-DatabricksOAuthToken.ps1",
+            "claudeCode.environmentVariables",
+            "/status",
             "Opus 5 (1M context)",
             "Opus 4.8 (1M context)",
             "Sonnet 5 (1M context)",
             "Sonnet 4.6 (1M context)",
             "Haiku 4.5 (200K context)",
-            "## 4. 모델 선택기",
+            "## 2. Databricks API부터 검증",
+            "## 4. 다중 모델 영구 설정",
+            "## 5. 선택: 단일 모델 최소 설정",
         ):
             self.assertIn(required_text, guide)
 
-        settings_code = next(
-            code
+        json_settings = [
+            json.loads(code)
             for language, code, _ in fenced_blocks(guide_path)
             if language == "json"
+        ]
+        settings = next(
+            value
+            for value in json_settings
+            if value.get("model") == "databricks-claude-sonnet-5[1m]"
         )
-        settings = json.loads(settings_code)
         self.assertNotIn("availableModels", settings)
         self.assertNotIn("enforceAvailableModels", settings)
         self.assertNotIn("modelOverrides", settings)
@@ -163,6 +180,33 @@ class DocumentationTests(unittest.TestCase):
             settings["env"]["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"],
             "Sonnet 4.6 (1M context)",
         )
+
+        minimal_settings = next(
+            value
+            for value in json_settings
+            if value.get("model") == "databricks-claude-sonnet-4-6[1m]"
+            and "ANTHROPIC_DEFAULT_OPUS_MODEL" not in value.get("env", {})
+        )
+        self.assertEqual(
+            set(minimal_settings["env"]),
+            {
+                "ANTHROPIC_BASE_URL",
+                "ANTHROPIC_AUTH_TOKEN",
+                "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
+            },
+        )
+
+    def test_claude_guide_validates_before_persisting(self) -> None:
+        guide = (ROOT / "docs" / "claude-code-databricks.md").read_text(
+            encoding="utf-8"
+        )
+
+        api_heading = "## 2. Databricks API부터 검증"
+        cli_heading = "## 3. Claude Code에서 임시 검증"
+        settings_heading = "## 4. 다중 모델 영구 설정"
+
+        self.assertLess(guide.index(api_heading), guide.index(cli_heading))
+        self.assertLess(guide.index(cli_heading), guide.index(settings_heading))
 
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}
