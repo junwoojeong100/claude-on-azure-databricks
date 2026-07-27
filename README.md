@@ -14,7 +14,7 @@ workspace, 이미 배포된 serving endpoint, Databricks-hosted Claude 모델을
 Microsoft Agent Framework(MAF) 샘플은 workspace와 모델 연결을 확인하는 별도 실습으로
 유지합니다. 다만 workspace 생성이나 Claude Code 연결의 필수 단계로 묶지는 않습니다.
 
-> 최종 검증: 2026-07-14. 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로
+> 공식 문서 확인: 2026-07-27. 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로
 > 운영 적용 전 공식 문서를 다시 확인하세요.
 
 ## 1. Azure Databricks workspace 만들기
@@ -67,7 +67,7 @@ Windows에서 workspace만 생성하거나 각 단계를 직접 제어하려면
 | 값 | 예 |
 | --- | --- |
 | Workspace URL | `https://adb-<workspace-id>.<number>.azuredatabricks.net` |
-| 호출 가능한 Claude 모델 ID | `databricks-claude-opus-4-8`, `databricks-claude-sonnet-5`, `databricks-claude-haiku-4-5` |
+| 호출 가능한 Claude 모델 ID | Opus 5·4.8, Sonnet 5·4.6, Haiku 4.5의 Databricks endpoint ID |
 | 모델 호출 credential | 빠른 검증은 PAT(legacy), 사용자 장기 사용은 OAuth U2M, 운영 자동화는 OAuth M2M |
 
 - 사전 구성된 Databricks-hosted pay-per-token 모델은 workspace 접근 권한과 유효한
@@ -98,8 +98,8 @@ New-Item -ItemType Directory -Force -Path "$HOME\.claude" | Out-Null
 ```
 
 `~/.claude/settings.json`에 workspace URL, PAT, 모델 ID를 입력합니다.
-Claude Code가 이 파일을 직접 읽어 `/model` 선택기의 Opus/Sonnet/Haiku mapping과
-Opus/Sonnet의 1M context selector까지 구성하므로 별도 자동 스크립트는 필요하지 않습니다.
+Claude Code가 이 파일을 직접 읽어 `/model` 선택기에 최신 Opus·Sonnet 각 2개와 Haiku
+1개를 표시하고 Databricks endpoint로 연결하므로 별도 자동 스크립트는 필요하지 않습니다.
 
 가장 쉬운 시작 경로는 PAT입니다. 정적 PAT 저장을 피하려면
 [OAuth U2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-u2m)과
@@ -117,14 +117,23 @@ settings 파일에 복사하는 것만으로는 장기 사용에 적합하지 �
 ### 연결 확인
 
 ```bash
-for model in opus sonnet haiku; do
+models=(
+  "claude-opus-5[1m]"
+  "claude-opus-4-8[1m]"
+  "claude-sonnet-5[1m]"
+  "claude-sonnet-4-6[1m]"
+  "claude-haiku-4-5"
+)
+
+for model in "${models[@]}"; do
   claude --model "$model" \
     -p "Reply with exactly: ${model} OK" \
     --output-format json
 done
 ```
 
-Opus와 Sonnet의 `modelUsage.contextWindow`는 `1000000`, Haiku는 `200000`이어야 합니다.
+Opus와 Sonnet 4개 모델의 `modelUsage.contextWindow`는 `1000000`, Haiku는
+`200000`이어야 합니다.
 
 대화형으로 실행한 뒤 `/model`에서 검증된 Databricks 모델을 선택할 수 있습니다.
 

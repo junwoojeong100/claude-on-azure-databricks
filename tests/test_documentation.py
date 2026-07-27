@@ -113,8 +113,10 @@ class DocumentationTests(unittest.TestCase):
             "WebSearch",
             "availableModels",
             "enforceAvailableModels",
+            "modelOverrides",
             "apiKeyHelper",
-            "for model in opus sonnet haiku",
+            "claude-opus-4-8[1m]",
+            "claude-sonnet-4-6[1m]",
             "## 4. 모델 선택기",
         ):
             self.assertIn(required_text, guide)
@@ -125,15 +127,38 @@ class DocumentationTests(unittest.TestCase):
             if language == "json"
         )
         settings = json.loads(settings_code)
-        self.assertEqual(settings["availableModels"], ["opus", "sonnet", "haiku"])
+        self.assertEqual(
+            settings["availableModels"],
+            [
+                "claude-opus-5",
+                "claude-opus-4-8",
+                "claude-sonnet-5",
+                "claude-sonnet-4-6",
+                "claude-haiku-4-5",
+            ],
+        )
         self.assertTrue(settings["enforceAvailableModels"])
         self.assertEqual(
+            settings["modelOverrides"],
+            {
+                "claude-opus-5": "databricks-claude-opus-5",
+                "claude-opus-4-8": "databricks-claude-opus-4-8",
+                "claude-sonnet-5": "databricks-claude-sonnet-5",
+                "claude-sonnet-4-6": "databricks-claude-sonnet-4-6",
+                "claude-haiku-4-5": "databricks-claude-haiku-4-5",
+            },
+        )
+        self.assertEqual(
             settings["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"],
-            "databricks-claude-opus-4-8[1m]",
+            "claude-opus-5[1m]",
+        )
+        self.assertEqual(
+            settings["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"],
+            "Opus 5 (1M context)",
         )
         self.assertEqual(
             settings["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"],
-            "databricks-claude-sonnet-5[1m]",
+            "claude-sonnet-5[1m]",
         )
 
     def test_local_links_and_anchors_resolve(self) -> None:
