@@ -180,7 +180,6 @@ class DocumentationTests(unittest.TestCase):
             settings["env"]["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"],
             "Sonnet 4.6 (1M context)",
         )
-
         minimal_settings = next(
             value
             for value in json_settings

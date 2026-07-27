@@ -238,6 +238,27 @@ for model in "${models[@]}"; do
 done
 ```
 
+Windows PowerShell:
+
+```powershell
+$models = @(
+  'databricks-claude-opus-5[1m]'
+  'databricks-claude-opus-4-8[1m]'
+  'databricks-claude-sonnet-5[1m]'
+  'databricks-claude-sonnet-4-6[1m]'
+  'databricks-claude-haiku-4-5'
+)
+
+$models | ForEach-Object {
+  claude --model $_ `
+    -p "Reply with exactly: $_ OK" `
+    --output-format json
+}
+```
+
+다섯 응답 모두 `is_error`가 `false`여야 합니다. `modelUsage`에는 선택한 모델에 대응하는
+`databricks-claude-*` ID가 표시됩니다.
+
 ## 5. 선택: 단일 모델 최소 설정
 
 특정 모델만 허용하거나 picker mapping이 필요하지 않은 환경에서는 다음 최소 설정을
