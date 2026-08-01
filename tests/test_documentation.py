@@ -135,6 +135,33 @@ class DocumentationTests(unittest.TestCase):
             flows,
         )
 
+    def test_core_guides_have_explicit_scope_and_completion(self) -> None:
+        guides = {
+            "claude-code-databricks.md": (
+                "# Claude Code를 Azure Databricks Claude에 직접 연결하기",
+                "Databricks 흐름의 1단계",
+            ),
+            "existing-litellm-databricks.md": (
+                "# 기존 LiteLLM을 통해 Claude Code를 Azure Databricks에 연결하기",
+                "Databricks 흐름의 2단계",
+            ),
+            "claude-code-foundry-local.md": (
+                "# 로컬 LiteLLM을 통해 Claude Code를 Microsoft Foundry GPT-5.6에 연결하기",
+                "Foundry 흐름의 1단계",
+            ),
+            "existing-litellm-foundry.md": (
+                "# 기존 LiteLLM을 통해 Claude Code를 Microsoft Foundry GPT-5.6에 연결하기",
+                "Foundry 흐름의 2단계",
+            ),
+        }
+
+        for filename, (title, step) in guides.items():
+            guide = (ROOT / "docs" / filename).read_text(encoding="utf-8")
+            with self.subTest(filename=filename):
+                self.assertTrue(guide.startswith(title))
+                self.assertIn(step, guide)
+                self.assertIn("**완료 기준:**", guide)
+
     def test_claude_guide_covers_required_configuration(self) -> None:
         guide_path = ROOT / "docs" / "claude-code-databricks.md"
         guide = guide_path.read_text(encoding="utf-8")

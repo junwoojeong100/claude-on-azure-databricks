@@ -1,4 +1,4 @@
-# Claude Code에서 Azure Databricks Claude 사용하기
+# Claude Code를 Azure Databricks Claude에 직접 연결하기
 
 Azure Databricks workspace에서 Anthropic Claude 모델을 호출할 수 있다면 Claude Code를
 Databricks의 네이티브 Anthropic Messages API에 직접 연결할 수 있습니다.
@@ -264,6 +264,9 @@ $models | ForEach-Object {
 
 다섯 응답 모두 `is_error`가 `false`여야 합니다. `modelUsage`에는 선택한 모델에 대응하는
 `databricks-claude-*` ID가 표시됩니다.
+
+> **완료 기준:** 새 Claude Code session의 `/status`에 Databricks Anthropic base URL이
+> 표시되고, 등록한 모델의 테스트 응답이 모두 성공합니다.
 
 ## 5. 선택: 단일 모델 최소 설정
 

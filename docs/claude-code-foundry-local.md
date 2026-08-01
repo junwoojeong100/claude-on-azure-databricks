@@ -1,4 +1,4 @@
-# 로컬 LiteLLM으로 Claude Code에서 Microsoft Foundry GPT-5.6 사용하기
+# 로컬 LiteLLM을 통해 Claude Code를 Microsoft Foundry GPT-5.6에 연결하기
 
 이 문서는 Claude Code와 LiteLLM을 같은 로컬 PC에서 실행해 Microsoft Foundry의
 GPT-5.6 Sol, Terra, Luna를 사용하는 절차입니다. 로컬 연결이 성공한 뒤 조직의 기존
@@ -283,6 +283,9 @@ done
 인증과 여러 사용자 지원이 필요하면 local key나 Azure CLI token을 서버로 복사하지 말고
 [기존 LiteLLM 서버에 Foundry GPT-5.6 연결하기](existing-litellm-foundry.md)에서
 managed identity 방식으로 전환합니다.
+
+> **완료 기준:** 로컬 LiteLLM이 `127.0.0.1:4000`에서 실행 중이고, `/model`의
+> **From gateway**에 세 alias가 표시되며 세 Claude Code 테스트가 모두 성공합니다.
 
 ## 문제 해결
 

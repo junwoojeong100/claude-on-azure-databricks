@@ -1,4 +1,4 @@
-# Claude Code on Azure Databricks and Microsoft Foundry
+# Claude Code를 Azure Databricks와 Microsoft Foundry에 연결하기
 
 Claude Code를 Azure Databricks Claude 또는 Microsoft Foundry GPT-5.6에 연결하는
 실습 가이드입니다.
@@ -7,8 +7,9 @@ Claude Code를 Azure Databricks Claude 또는 Microsoft Foundry GPT-5.6에 연�
 Messages API에 직접 연결하고, Foundry GPT-5.6은 LiteLLM이 Anthropic Messages와
 OpenAI Responses API를 변환합니다.
 
-> 공식 문서 확인: 2026-07-27. 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로
-> 운영 적용 전 공식 문서를 다시 확인하세요.
+> 공식 문서 확인: Databricks 2026-07-27, Foundry와 LiteLLM 2026-08-01.
+> 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로 운영 적용 전 공식
+> 문서를 다시 확인하세요.
 
 ## 1. 연결 흐름 선택
 
@@ -163,8 +164,12 @@ MAF는 Claude Code 연결과 독립적인 별도 실습입니다.
 - PAT나 OAuth access token을 Git에 커밋하지 마세요.
 - PAT는 가장 쉬운 로컬 검증 방법이지만 legacy 인증입니다. 사용자 장기 사용은 OAuth U2M,
   운영 자동화는 OAuth M2M을 사용하세요.
+- 로컬 Foundry 실습의 LiteLLM은 `127.0.0.1`에만 bind하고 local key를 공유하지 마세요.
+- 기존 LiteLLM에서 Foundry에 연결할 때는 API key 대신 host의 managed identity를
+  사용합니다.
 - Workspace와 pay-per-token 모델 사용에는 비용이 발생합니다. 실습용 리소스는 사용 후
   [workspace 생성 가이드의 정리 절차](docs/azure-databricks-setup.md#정리)로 삭제하세요.
+- Foundry GPT-5.6 호출에도 deployment 유형과 token 사용량에 따른 비용이 발생합니다.
 - Foundation Model API의 context window와 workspace 요청 한도는 별개입니다.
 
 ## 공식 문서

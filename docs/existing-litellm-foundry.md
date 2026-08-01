@@ -1,4 +1,4 @@
-# 기존 LiteLLM 서버에 Microsoft Foundry GPT-5.6 연결하기
+# 기존 LiteLLM을 통해 Claude Code를 Microsoft Foundry GPT-5.6에 연결하기
 
 이 가이드는 이미 운영 중인 LiteLLM Proxy에 Microsoft Foundry의 GPT-5.6 Sol, Terra,
 Luna를 추가하는 절차입니다. 기존 Databricks와 다른 provider 모델은 그대로 유지하며,
@@ -345,6 +345,10 @@ VS Code extension을 사용하면 VS Code 사용자 settings의
 Foundry GPT 모델은 LiteLLM이 Anthropic request와 response를 변환하는 non-Anthropic
 backend입니다. Tool use, reasoning, image input처럼 실제 사용할 기능을 각각 검증한 뒤
 사용자에게 공개합니다.
+
+> **완료 기준:** `/status`의 Anthropic base URL이 조직의 LiteLLM URL이고,
+> `/model`의 **From gateway**에 세 alias가 표시되며 세 Claude Code 테스트가 모두
+> 성공합니다.
 
 ## 선택: 비용 추적
 
