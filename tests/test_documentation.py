@@ -277,9 +277,16 @@ class DocumentationTests(unittest.TestCase):
         api_heading = "## 2. Databricks API부터 검증"
         cli_heading = "## 3. Claude Code에서 임시 검증"
         settings_heading = "## 4. 다중 모델 영구 설정"
+        oauth_heading = "## 7. PAT 대신 OAuth U2M"
+        vscode_heading = "## 8. VS Code extension 사용 시"
+        troubleshooting_heading = "## 문제 해결"
 
         self.assertLess(guide.index(api_heading), guide.index(cli_heading))
         self.assertLess(guide.index(cli_heading), guide.index(settings_heading))
+        self.assertLess(guide.index(oauth_heading), guide.index(vscode_heading))
+        self.assertLess(
+            guide.index(vscode_heading), guide.index(troubleshooting_heading)
+        )
         self.assertLess(
             guide.index("scripts/configure_claude_code.py"),
             guide.index('"ANTHROPIC_DEFAULT_OPUS_MODEL"'),

@@ -105,7 +105,7 @@ Invoke-RestMethod `
 ```
 
 성공 응답의 최상위 `type`은 `message`입니다. 실패하면
-[문제 해결](#7-문제-해결)에서 HTTP 상태를 먼저 확인하세요.
+[문제 해결](#문제-해결)에서 HTTP 상태를 먼저 확인하세요.
 
 ## 3. Claude Code에서 임시 검증
 
@@ -316,20 +316,7 @@ Enterprise-tier pay-per-token 표의 Claude 한도는 ITPM 200K, OTPM 20K이고 
 제한은 4MB입니다. 따라서 1M-token 입력을 한 요청에서 모두 사용할 수 있다고 가정하면
 안 됩니다.
 
-## 7. 문제 해결
-
-| 단계 또는 증상 | 확인할 항목 |
-| --- | --- |
-| 직접 API 호출도 `401` | PAT/OAuth token, workspace host, token이 같은 workspace용인지 |
-| 직접 API는 성공하고 Claude Code만 실패 | `/status`, 환경변수 충돌, Claude Code 버전 |
-| beta 관련 `400` | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
-| `web_search_*` 관련 `400` | `permissions.deny`의 `WebSearch` |
-| `contextWindow`가 `200000` | 1M 모델 값 끝의 `[1m]`과 Claude Code 재시작 |
-| 모델을 찾지 못함 | 실제 모델 ID와 workspace 리전 가용성 |
-| `403 ... rate limit of 0` | 모델·리전, cross-Geo, `CAN QUERY`/`EXECUTE`, 계정 용량 |
-| 일반적인 사용량 초과 `429` | ITPM, OTPM, QPH와 재시도 간격 |
-
-## 8. PAT 대신 OAuth U2M
+## 7. PAT 대신 OAuth U2M
 
 Databricks OAuth U2M은 access token을 자동으로 갱신할 수 있습니다. 이 리포는
 Databricks CLI의 token cache를 Claude Code `apiKeyHelper`와 연결하는 helper를
@@ -392,7 +379,7 @@ $env:DATABRICKS_CONFIG_PROFILE = 'claude-code'
 조직의 credential provider나 vault에서 access token을 반환하는 별도 `apiKeyHelper`와
 연동해야 합니다.
 
-## 9. VS Code extension 사용 시
+## 8. VS Code extension 사용 시
 
 이 문서의 기본 경로는 Claude Code CLI입니다. VS Code extension은 자체 로그인 확인 전에
 credential을 읽어야 하므로 VS Code 사용자 settings의 `claudeCode.environmentVariables`에도
@@ -421,6 +408,19 @@ credential을 읽어야 하므로 VS Code 사용자 settings의 `claudeCode.envi
 전달되지만 extension 자체의 시작 전 로그인 확인에는 사용되지 않습니다. PAT를 저장하지
 않는 extension 배포는 조직에서 갱신된 credential을
 `claudeCode.environmentVariables`에 공급하는 별도 관리 방식이 필요합니다.
+
+## 문제 해결
+
+| 단계 또는 증상 | 확인할 항목 |
+| --- | --- |
+| 직접 API 호출도 `401` | PAT/OAuth token, workspace host, token이 같은 workspace용인지 |
+| 직접 API는 성공하고 Claude Code만 실패 | `/status`, 환경변수 충돌, Claude Code 버전 |
+| beta 관련 `400` | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
+| `web_search_*` 관련 `400` | `permissions.deny`의 `WebSearch` |
+| `contextWindow`가 `200000` | 1M 모델 값 끝의 `[1m]`과 Claude Code 재시작 |
+| 모델을 찾지 못함 | 실제 모델 ID와 workspace 리전 가용성 |
+| `403 ... rate limit of 0` | 모델·리전, cross-Geo, `CAN QUERY`/`EXECUTE`, 계정 용량 |
+| 일반적인 사용량 초과 `429` | ITPM, OTPM, QPH와 재시도 간격 |
 
 ## 공식 문서
 
