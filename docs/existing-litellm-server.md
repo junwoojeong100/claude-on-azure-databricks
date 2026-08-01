@@ -314,6 +314,35 @@ host가 표시될 수 있으므로 portal 값을 사용합니다.
 `FOUNDRY_GPT_API_KEY`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`은 설정하지 않습니다.
 System-assigned identity에서는 `AZURE_CLIENT_ID`도 설정하지 않습니다.
 
+### 8.4 재시작 전 managed identity 확인
+
+LiteLLM Proxy의 표준 `proxy` 설치에는 `azure-identity`가 포함됩니다. 자체 slim image나
+최소 dependency 설치를 사용한다면 아래 명령을 LiteLLM과 같은 container 또는 process
+환경에서 실행해 package와 managed identity token 획득을 함께 확인합니다. Token 값은
+출력하지 않습니다.
+
+```bash
+python - <<'PY'
+import os
+from datetime import datetime, timezone
+
+from azure.identity import ManagedIdentityCredential
+
+client_id = os.getenv("AZURE_CLIENT_ID")
+credential = ManagedIdentityCredential(client_id=client_id)
+token = credential.get_token(
+    os.getenv("FOUNDRY_GPT_AZURE_SCOPE", "https://ai.azure.com/.default")
+)
+expires_at = datetime.fromtimestamp(token.expires_on, tz=timezone.utc)
+print(f"managed identity token acquired; expires_at={expires_at.isoformat()}")
+PY
+```
+
+이 단계가 실패하면 LiteLLM을 재시작하기 전에 host identity 연결, `AZURE_CLIENT_ID`,
+managed identity endpoint 접근, `azure-identity` 설치 상태를 먼저 수정합니다. Token
+획득 성공은 identity endpoint 검증이며 Foundry RBAC까지 검증하지는 않으므로, 역할
+할당은 8.2절과 10절의 API smoke test에서 별도로 확인합니다.
+
 ## 9. 기존 `model_list`에 Foundry 모델 추가
 
 앞의 Databricks 항목 아래에 세 deployment를 추가합니다. 아래
@@ -368,6 +397,13 @@ System-assigned 방식에서 LiteLLM은 `DefaultAzureCredential` 경로로 host 
 `ManagedIdentityCredential`을 선택합니다. 두 방식 모두 token을 자동 갱신합니다.
 운영 host에는 다른 identity가 선택되지 않도록 Azure CLI login, service principal
 환경변수, 정적 Azure token을 두지 않습니다.
+
+`AZURE_CLIENT_ID`와 `enable_azure_ad_token_refresh`는 특정 Foundry 모델만의 설정이
+아니라 LiteLLM process 전체에 적용됩니다. 기존에 API key 없이 `azure/...` provider를
+사용하는 모델이 있다면 같은 managed identity를 사용해도 되는지와 각 모델의
+`azure_scope`가 올바른지 먼저 확인합니다. 서로 다른 user-assigned identity가 필요하면
+한 process에 이 설정을 혼합하지 말고 LiteLLM instance를 분리합니다. 명시적인 API key를
+사용하는 기존 모델은 해당 key 설정을 그대로 유지합니다.
 
 `base_model`은 custom deployment name과 실제 GPT-5.6 tier를 연결해 cost와 context
 metadata를 정확히 선택합니다. 위 예시는 Global Standard 가격 key입니다. US 또는 EU
@@ -432,7 +468,7 @@ curl -sS "$LITELLM_BASE_URL/v1/messages" \
 `/v1/responses`는 성공하고 `/v1/messages`만 실패하면 Foundry deployment보다 LiteLLM의
 Anthropic-to-Responses 변환 호환성을 먼저 확인합니다. LiteLLM 버전을 변경하기 전에는
 현재 stable 버전의 non-Anthropic 모델 가이드와 release note를 검토하세요. LiteLLM의
-Claude Code compatibility matrix는 Azure Foundry의 Claude tier를 자동 검증하지만
+Claude Code compatibility matrix는 Microsoft Foundry의 Claude tier를 자동 검증하지만
 GPT-5.6 Sol, Terra, Luna를 직접 인증하는 표는 아니므로 실제 기능별 smoke test를
 대체하지 않습니다.
 
@@ -487,6 +523,8 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 | `[1m]` 모델을 찾지 못함 | LiteLLM alias에서 `[1m]` 제거, Claude Code 최신 버전 |
 | Foundry `404 DeploymentNotFound` | model ID가 아니라 실제 deployment name을 사용했는지 |
 | Foundry `401` 또는 `403` | host의 managed identity 활성화, `Cognitive Services OpenAI User` 역할, scope와 resource endpoint |
+| managed identity token 획득 실패 | `azure-identity` 설치, host identity 연결, user-assigned identity의 `AZURE_CLIENT_ID`, identity endpoint 접근 |
+| 기존 keyless Azure 모델 인증이 바뀜 | process 전역 `AZURE_CLIENT_ID`와 `enable_azure_ad_token_refresh`, 동일 identity 사용 가능 여부 |
 | GPT-5.6 deployment 생성 실패 | 리전 가용성, subscription quota tier와 quota request |
 | `/model`에 Foundry alias가 없음 | gateway discovery, Claude Code 버전, virtual key 모델 권한 |
 | 비용이 unknown으로 표시됨 | `model_info.base_model`, cost map 갱신, pricing override |
