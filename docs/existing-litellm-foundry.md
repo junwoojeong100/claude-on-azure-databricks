@@ -3,11 +3,13 @@
 이 가이드는 이미 운영 중인 LiteLLM Proxy에 Microsoft Foundry의 GPT-5.6 Sol, Terra,
 Luna를 추가하는 절차입니다. 기존 Databricks와 다른 provider 모델은 그대로 유지하며,
 Foundry 인증에는 API key나 service principal 대신 managed identity만 사용합니다.
+Foundry 흐름의 2단계이므로 먼저
+[로컬 LiteLLM으로 Claude Code 연결](claude-code-foundry-local.md)을 완료해 resource
+endpoint, 실제 deployment name과 Claude Code 호환성을 확인하세요.
 
-> 이 리포는 LiteLLM이나 Foundry resource를 설치하지 않습니다. `README.md`와
-> `scripts/configure_claude_code.py`는 **Databricks 직접 연결용**이며 이 절차의
-> 사전 단계가 아닙니다. 이미 운영 중인 LiteLLM과 Foundry deployment가 있을 때만 이
-> 가이드를 사용합니다.
+> 이 리포는 LiteLLM이나 Foundry resource를 설치하지 않습니다.
+> `scripts/configure_claude_code.py`는 **Databricks 직접 연결용**이므로 이 흐름에서는
+> 실행하지 않습니다.
 
 ```text
 Claude Code
@@ -18,27 +20,19 @@ Claude Code
           └─ foundry-gpt-5.6-luna
 ```
 
-## Microsoft Learn의 직접 연결 가이드와 구분
+로컬 LiteLLM과 기존 LiteLLM 서버 연결의 차이는 다음과 같습니다.
 
-Microsoft Learn의
-[Claude Code용 Microsoft Foundry 구성](https://learn.microsoft.com/azure/foundry/foundry-models/how-to/configure-claude-code)
-문서는 Foundry에 배포한 **Claude 모델을 Claude Code에서 직접 호출**하는 절차입니다.
-이 문서는 **GPT-5.6을 LiteLLM의 Anthropic 호환 endpoint를 통해 호출**하므로 다음 설정을
-그대로 적용하지 않습니다.
-
-| 항목 | Microsoft Learn 직접 연결 | 이 가이드의 LiteLLM 연결 |
+| 항목 | 로컬 LiteLLM | 기존 LiteLLM 서버 |
 | --- | --- | --- |
-| Backend 모델 | Foundry의 Claude deployment | Foundry의 GPT-5.6 deployment |
-| Claude Code endpoint | Foundry의 `/anthropic` endpoint | LiteLLM의 `/v1/messages` endpoint |
-| Claude Code 설정 | `CLAUDE_CODE_USE_FOUNDRY`, `ANTHROPIC_FOUNDRY_RESOURCE` 또는 `ANTHROPIC_FOUNDRY_BASE_URL` | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` |
-| Client 인증 | Azure CLI의 Microsoft Entra ID 또는 Foundry API key | LiteLLM virtual key |
-| Foundry 인증 주체 | Claude Code를 실행하는 사용자 또는 workload | LiteLLM host의 managed identity |
+| Claude Code endpoint | `http://127.0.0.1:4000` | 조직의 LiteLLM URL |
+| Foundry 인증 주체 | `az login`한 로컬 사용자 | LiteLLM host의 managed identity |
+| LiteLLM credential | 로컬 master key | 사용자별 virtual key |
+| 운영 범위 | 한 사용자 개발·검증 | 중앙 운영과 여러 사용자 |
 
-두 방식을 혼합하지 않습니다. 이 가이드를 사용할 때 Claude Code에는
+로컬 key나 Azure CLI token을 기존 서버에 복사하지 않습니다. 또한 Microsoft Learn의
 `CLAUDE_CODE_USE_FOUNDRY`, `ANTHROPIC_FOUNDRY_RESOURCE`,
-`ANTHROPIC_FOUNDRY_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`를 설정하지 않습니다.
-사용자 PC의 `az login`도 Foundry backend 인증에 사용되지 않습니다. 대신 LiteLLM
-host의 managed identity가 `https://ai.azure.com/.default` scope로 token을 얻습니다.
+`ANTHROPIC_FOUNDRY_BASE_URL`과 `ANTHROPIC_FOUNDRY_API_KEY`는 Foundry의 Claude
+deployment 직접 연결용이므로 GPT-5.6 LiteLLM 흐름에는 설정하지 않습니다.
 
 > 공식 Microsoft Learn과 LiteLLM 문서 확인: 2026-08-01.
 >

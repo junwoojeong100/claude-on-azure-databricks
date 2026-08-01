@@ -103,6 +103,25 @@ class DocumentationTests(unittest.TestCase):
 
         self.assertEqual(linked_guides, set(docs_dir.glob("*.md")))
 
+    def test_readme_exposes_two_claude_code_connection_flows(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        flows = readme[readme.index("## 3. 연결 흐름 선택") :]
+
+        expected_order = (
+            "### 흐름 A: Azure Databricks Claude",
+            "docs/claude-code-databricks.md",
+            "docs/existing-litellm-server.md",
+            "### 흐름 B: Microsoft Foundry GPT-5.6",
+            "docs/claude-code-foundry-local.md",
+            "docs/existing-litellm-foundry.md",
+        )
+        positions = [flows.index(value) for value in expected_order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn(
+            "흐름 B는 1단계의 로컬 LiteLLM과 2단계의 기존 LiteLLM 서버 모두",
+            flows,
+        )
+
     def test_claude_guide_covers_required_configuration(self) -> None:
         guide_path = ROOT / "docs" / "claude-code-databricks.md"
         guide = guide_path.read_text(encoding="utf-8")
@@ -253,6 +272,9 @@ class DocumentationTests(unittest.TestCase):
         guide = (ROOT / "docs" / "existing-litellm-foundry.md").read_text(
             encoding="utf-8"
         )
+        local_guide = (ROOT / "docs" / "claude-code-foundry-local.md").read_text(
+            encoding="utf-8"
+        )
 
         for required_text in (
             "## 2. LiteLLM host에 managed identity 연결",
@@ -264,16 +286,28 @@ class DocumentationTests(unittest.TestCase):
             "LiteLLM process 전체에",
             "AZURE_OPENAI_API_KEY",
             "922,000 tokens",
-            "Claude Code용 Microsoft Foundry 구성",
             "CLAUDE_CODE_USE_FOUNDRY",
             "ANTHROPIC_FOUNDRY_RESOURCE",
-            "사용자 PC의 `az login`도 Foundry backend 인증에 사용되지 않습니다",
             "이 리포는 LiteLLM이나 Foundry resource를 설치하지 않습니다",
             "`scripts/configure_claude_code.py`는 Databricks workspace URL",
             '"model": "foundry-gpt-5.6-sol"',
             "claudeCode.environmentVariables",
+            "claude-code-foundry-local.md",
         ):
             self.assertIn(required_text, guide)
+
+        for required_text in (
+            "Claude Code는 Foundry GPT-5.6의 OpenAI Responses API를 직접 호출하지 않습니다",
+            "Cognitive Services OpenAI User",
+            'AZURE_CREDENTIAL="AzureCliCredential"',
+            "enable_azure_ad_token_refresh: true",
+            "azure/responses/<sol-deployment-name>",
+            "ANTHROPIC_BASE_URL",
+            "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
+            "claude --model",
+            "existing-litellm-foundry.md",
+        ):
+            self.assertIn(required_text, local_guide)
 
         json_settings = [
             json.loads(code)

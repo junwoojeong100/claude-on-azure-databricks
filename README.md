@@ -128,13 +128,34 @@ az account set --subscription '<name-or-id>'
 
 Claude Code 설정을 변경하지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 추가하세요.
 
-## 3. 선택 기능
+## 3. 연결 흐름 선택
+
+각 backend는 먼저 로컬 Claude Code에서 검증한 뒤, 필요한 경우 기존 LiteLLM 서버로
+전환합니다.
+
+### 흐름 A: Azure Databricks Claude
+
+| 단계 | 목적 | 가이드 |
+| --- | --- | --- |
+| 1 | 로컬 Claude Code에서 Databricks 직접 연결 | [Databricks 직접 연결](docs/claude-code-databricks.md) |
+| 2 | 기존 LiteLLM 서버를 통해 Databricks 연결 | [Databricks LiteLLM 연결](docs/existing-litellm-server.md) |
+
+### 흐름 B: Microsoft Foundry GPT-5.6
+
+| 단계 | 목적 | 가이드 |
+| --- | --- | --- |
+| 1 | 로컬 LiteLLM을 통해 Claude Code 연결 | [Foundry GPT-5.6 로컬 연결](docs/claude-code-foundry-local.md) |
+| 2 | 기존 LiteLLM 서버를 통해 Claude Code 연결 | [Foundry GPT-5.6 LiteLLM 연결](docs/existing-litellm-foundry.md) |
+
+> Claude Code는 Foundry GPT-5.6의 OpenAI Responses API를 직접 호출하지 않습니다.
+> 흐름 B는 1단계의 로컬 LiteLLM과 2단계의 기존 LiteLLM 서버 모두 Anthropic Messages
+> 변환을 사용합니다.
+
+## 4. 선택 기능
 
 | 목적 | 가이드 |
 | --- | --- |
-| 단일 모델만 유지하는 최소 설정 | [단일 모델 최소 설정](docs/claude-code-databricks.md#5-선택-단일-모델-최소-설정) |
-| 기존 LiteLLM 서버에 Databricks Claude 추가 | [기존 LiteLLM 서버 Databricks 가이드](docs/existing-litellm-server.md) |
-| 기존 LiteLLM 서버에 Microsoft Foundry GPT-5.6 추가 | [기존 LiteLLM 서버 Foundry 가이드](docs/existing-litellm-foundry.md) |
+| 단일 Databricks 모델만 유지하는 최소 설정 | [단일 모델 최소 설정](docs/claude-code-databricks.md#5-선택-단일-모델-최소-설정) |
 | PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#8-pat-대신-oauth-u2m) |
 | VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#9-vs-code-extension-사용-시) |
 | OpenAI 호환 Chat Completions 경로 확인 | [Microsoft Agent Framework 샘플](docs/agent-framework.md) |
