@@ -268,6 +268,10 @@ class DocumentationTests(unittest.TestCase):
             "CLAUDE_CODE_USE_FOUNDRY",
             "ANTHROPIC_FOUNDRY_RESOURCE",
             "사용자 PC의 `az login`도 Foundry backend 인증에 사용되지 않습니다",
+            "이 리포는 LiteLLM이나 Foundry resource를 설치하지 않습니다",
+            "`scripts/configure_claude_code.py`는 Databricks workspace URL",
+            '"model": "foundry-gpt-5.6-sol"',
+            "claudeCode.environmentVariables",
         ):
             self.assertIn(required_text, guide)
 
@@ -279,6 +283,7 @@ class DocumentationTests(unittest.TestCase):
             if language == "json"
         ]
         gateway_env = json_settings[0]["env"]
+        self.assertEqual(json_settings[0]["model"], "foundry-gpt-5.6-sol")
         self.assertIn("ANTHROPIC_BASE_URL", gateway_env)
         self.assertIn("ANTHROPIC_AUTH_TOKEN", gateway_env)
         self.assertNotIn("CLAUDE_CODE_USE_FOUNDRY", gateway_env)
