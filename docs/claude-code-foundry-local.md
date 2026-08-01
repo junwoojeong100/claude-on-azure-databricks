@@ -4,6 +4,7 @@
 GPT-5.6 Sol, Terra, Luna를 사용하는 절차입니다. 로컬 연결이 성공한 뒤 조직의 기존
 gateway로 전환하려면
 [기존 LiteLLM 서버 연결 가이드](existing-litellm-foundry.md)로 진행합니다.
+이 문서는 Foundry 흐름의 1단계입니다.
 
 ```text
 Claude Code

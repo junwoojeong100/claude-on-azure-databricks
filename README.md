@@ -1,16 +1,35 @@
-# Claude on Azure Databricks
+# Claude Code on Azure Databricks and Microsoft Foundry
 
-Azure Databricks의 네이티브 Anthropic Messages API를 Claude Code의 모델
-backend로 사용하는 방법을 안내합니다.
+Claude Code를 Azure Databricks Claude 또는 Microsoft Foundry GPT-5.6에 연결하는
+실습 가이드입니다.
 
-가장 일반적인 고객 경로는 **기존 workspace에서 Claude 모델 하나로 API를 먼저 검증한
-뒤, Claude Code에는 여러 Databricks 모델을 한 번에 등록하는 것**입니다. Workspace 생성과
-Microsoft Agent Framework(MAF)는 첫 연결에 필요하지 않습니다.
+먼저 아래 표에서 backend와 실행 위치를 선택하세요. Databricks는 네이티브 Anthropic
+Messages API에 직접 연결하고, Foundry GPT-5.6은 LiteLLM이 Anthropic Messages와
+OpenAI Responses API를 변환합니다.
 
 > 공식 문서 확인: 2026-07-27. 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로
 > 운영 적용 전 공식 문서를 다시 확인하세요.
 
-## 1. 5분 연결: 기존 workspace에 Claude Code 연결
+## 1. 연결 흐름 선택
+
+### 흐름 A: Azure Databricks Claude
+
+| 단계 | 목적 | 가이드 |
+| --- | --- | --- |
+| 1 | 로컬 Claude Code에서 Databricks에 직접 연결 | [Databricks 직접 연결](docs/claude-code-databricks.md) |
+| 2 | 기존 LiteLLM 서버를 통해 Claude Code를 Databricks에 연결 | [기존 LiteLLM에서 Databricks 연결](docs/existing-litellm-databricks.md) |
+
+### 흐름 B: Microsoft Foundry GPT-5.6
+
+| 단계 | 목적 | 가이드 |
+| --- | --- | --- |
+| 1 | 로컬 LiteLLM을 통해 Claude Code를 Foundry GPT-5.6에 연결 | [로컬 LiteLLM에서 Foundry 연결](docs/claude-code-foundry-local.md) |
+| 2 | 기존 LiteLLM 서버를 통해 Claude Code를 Foundry GPT-5.6에 연결 | [기존 LiteLLM에서 Foundry 연결](docs/existing-litellm-foundry.md) |
+
+> Foundry GPT-5.6은 Claude Code가 OpenAI Responses API를 직접 호출할 수 없으므로
+> 로컬과 기존 서버 흐름 모두 LiteLLM의 Anthropic Messages 변환을 사용합니다.
+
+## 2. 5분 연결: 기존 Databricks workspace
 
 다음 세 값이 준비되어 있으면 바로 시작할 수 있습니다.
 
@@ -85,7 +104,7 @@ py -3 scripts\configure_claude_code.py
 1개만 유지합니다. `/model` picker에는 Opus·Sonnet 각 2개와 Haiku 1개가 바로 표시되며
 기본 모델은 Opus 5입니다. 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
 
-## 2. Workspace가 없다면
+## 3. Databricks workspace가 없다면
 
 새 Azure Databricks workspace가 필요할 때만
 [Azure Databricks workspace 생성 가이드](docs/azure-databricks-setup.md)를 사용합니다.
@@ -127,29 +146,6 @@ az account set --subscription '<name-or-id>'
 > 확인합니다.
 
 Claude Code 설정을 변경하지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 추가하세요.
-
-## 3. 연결 흐름 선택
-
-각 backend는 먼저 로컬 Claude Code에서 검증한 뒤, 필요한 경우 기존 LiteLLM 서버로
-전환합니다.
-
-### 흐름 A: Azure Databricks Claude
-
-| 단계 | 목적 | 가이드 |
-| --- | --- | --- |
-| 1 | 로컬 Claude Code에서 Databricks 직접 연결 | [Databricks 직접 연결](docs/claude-code-databricks.md) |
-| 2 | 기존 LiteLLM 서버를 통해 Databricks 연결 | [Databricks LiteLLM 연결](docs/existing-litellm-server.md) |
-
-### 흐름 B: Microsoft Foundry GPT-5.6
-
-| 단계 | 목적 | 가이드 |
-| --- | --- | --- |
-| 1 | 로컬 LiteLLM을 통해 Claude Code를 Foundry GPT-5.6에 연결 | [로컬 LiteLLM에서 Foundry 연결](docs/claude-code-foundry-local.md) |
-| 2 | 기존 LiteLLM 서버를 통해 Claude Code를 Foundry GPT-5.6에 연결 | [기존 LiteLLM에서 Foundry 연결](docs/existing-litellm-foundry.md) |
-
-> Claude Code는 Foundry GPT-5.6의 OpenAI Responses API를 직접 호출하지 않습니다.
-> 흐름 B는 1단계의 로컬 LiteLLM과 2단계의 기존 LiteLLM 서버 모두 Anthropic Messages
-> 변환을 사용합니다.
 
 ## 4. 선택 기능
 

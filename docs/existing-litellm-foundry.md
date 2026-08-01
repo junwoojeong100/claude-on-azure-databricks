@@ -3,7 +3,7 @@
 이 가이드는 이미 운영 중인 LiteLLM Proxy에 Microsoft Foundry의 GPT-5.6 Sol, Terra,
 Luna를 추가하는 절차입니다. 기존 Databricks와 다른 provider 모델은 그대로 유지하며,
 Foundry 인증에는 API key나 service principal 대신 managed identity만 사용합니다.
-Foundry 흐름의 2단계이므로 먼저
+이 문서는 Foundry 흐름의 2단계입니다. 먼저
 [로컬 LiteLLM으로 Claude Code 연결](claude-code-foundry-local.md)을 완료해 resource
 endpoint, 실제 deployment name과 Claude Code 호환성을 확인하세요.
 
@@ -236,14 +236,6 @@ token을 자동 갱신합니다.
 적용됩니다. 기존 keyless `azure/...` 모델이 같은 identity를 사용해도 되는지와 각
 모델의 `azure_scope`를 확인합니다. 서로 다른 identity가 필요하면 instance를 분리합니다.
 
-위 `base_model`은 Global Standard 가격 key입니다. US 또는 EU Data Zone deployment는
-각각 `azure/us/gpt-5.6-*`, `azure/eu/gpt-5.6-*` key를 사용합니다. Resource 위치가
-아니라 실제 deployment type을 기준으로 선택합니다.
-
-LiteLLM이 local cost map만 사용한다면 GPT-5.6 metadata가 포함된 버전을 사용하거나
-Admin UI의 **Reload Model Cost Map** 또는 기존 운영 절차의
-`POST /reload/model_cost_map`으로 최신 map을 불러옵니다.
-
 ## 4. Foundry route를 순서대로 검증
 
 기존 운영 절차로 LiteLLM을 rolling restart한 뒤 URL과 virtual key를 설정합니다.
@@ -324,7 +316,7 @@ Anthropic-to-Responses 변환 호환성을 먼저 확인합니다. LiteLLM 버�
 `databricks-claude-*` 기본 모델을 다시 저장하므로 위 설정 후 실행하지 않습니다.
 기존에 이 스크립트로 설정했다면 다음 기준으로 정리합니다.
 
-- 같은 LiteLLM에 [Databricks alias](existing-litellm-server.md)도 등록되어 있고 virtual
+- 같은 LiteLLM에 [Databricks alias](existing-litellm-databricks.md)도 등록되어 있고 virtual
   key가 접근할 수 있으면 기존 `ANTHROPIC_DEFAULT_*` picker 값은 유지할 수 있습니다.
 - Foundry 모델만 제공하는 LiteLLM이면 기존 `databricks-claude-*`를 가리키는 최상위
   `model`, `ANTHROPIC_DEFAULT_*`, `ANTHROPIC_CUSTOM_MODEL_OPTION*` 값을 제거하고 위처럼
@@ -353,6 +345,16 @@ VS Code extension을 사용하면 VS Code 사용자 settings의
 Foundry GPT 모델은 LiteLLM이 Anthropic request와 response를 변환하는 non-Anthropic
 backend입니다. Tool use, reasoning, image input처럼 실제 사용할 기능을 각각 검증한 뒤
 사용자에게 공개합니다.
+
+## 선택: 비용 추적
+
+위 `base_model`은 Global Standard 가격 key입니다. US 또는 EU Data Zone deployment는
+각각 `azure/us/gpt-5.6-*`, `azure/eu/gpt-5.6-*` key를 사용합니다. Resource 위치가
+아니라 실제 deployment type을 기준으로 선택합니다.
+
+LiteLLM이 local cost map만 사용한다면 GPT-5.6 metadata가 포함된 버전을 사용하거나
+Admin UI의 **Reload Model Cost Map** 또는 기존 운영 절차의
+`POST /reload/model_cost_map`으로 최신 map을 불러옵니다.
 
 ## 문제 해결
 

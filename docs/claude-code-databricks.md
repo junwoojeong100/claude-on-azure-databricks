@@ -3,7 +3,8 @@
 Azure Databricks workspace에서 Anthropic Claude 모델을 호출할 수 있다면 Claude Code를
 Databricks의 네이티브 Anthropic Messages API에 직접 연결할 수 있습니다.
 이 문서는 Databricks 흐름의 1단계입니다. 검증 후 기존 gateway로 중앙화하려면
-[기존 LiteLLM 서버 Databricks 연결 가이드](existing-litellm-server.md)로 진행합니다.
+[기존 LiteLLM 서버 Databricks 연결 가이드](existing-litellm-databricks.md)로
+진행합니다.
 
 ```text
 Claude Code

@@ -3,7 +3,7 @@
 이 가이드는 고객이 이미 운영 중인 LiteLLM Proxy 서버가 있고, Claude Code의 Azure
 Databricks 직접 연결을 LiteLLM 경유 방식으로 바꾸려는 경우에 사용합니다. LiteLLM
 설치, 데이터베이스, TLS, 로드 밸런서와 모니터링은 기존 구성을 그대로 사용합니다.
-Databricks 흐름의 2단계이므로 먼저
+이 문서는 Databricks 흐름의 2단계입니다. 먼저
 [로컬 Claude Code에서 Databricks 직접 연결](claude-code-databricks.md)을 완료해
 workspace URL, credential과 호출 가능한 모델 ID를 확인하세요.
 

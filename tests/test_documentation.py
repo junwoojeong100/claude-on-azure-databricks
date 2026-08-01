@@ -67,13 +67,18 @@ def fenced_blocks(path: Path) -> list[tuple[str, str, int]]:
 
 
 class DocumentationTests(unittest.TestCase):
-    def test_readme_leads_with_existing_workspace_quickstart(self) -> None:
+    def test_readme_leads_with_connection_flows(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        quickstart_heading = "## 1. 5분 연결: 기존 workspace에 Claude Code 연결"
-        workspace_heading = "## 2. Workspace가 없다면"
+        flows_heading = "## 1. 연결 흐름 선택"
+        quickstart_heading = "## 2. 5분 연결: 기존 Databricks workspace"
+        workspace_heading = "## 3. Databricks workspace가 없다면"
 
+        self.assertIn(flows_heading, readme)
         self.assertIn(quickstart_heading, readme)
         self.assertIn(workspace_heading, readme)
+        self.assertLess(
+            readme.index(flows_heading), readme.index(quickstart_heading)
+        )
         self.assertLess(
             readme.index(quickstart_heading), readme.index(workspace_heading)
         )
@@ -105,12 +110,12 @@ class DocumentationTests(unittest.TestCase):
 
     def test_readme_exposes_two_claude_code_connection_flows(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        flows = readme[readme.index("## 3. 연결 흐름 선택") :]
+        flows = readme[readme.index("## 1. 연결 흐름 선택") :]
 
         expected_order = (
             "### 흐름 A: Azure Databricks Claude",
             "docs/claude-code-databricks.md",
-            "docs/existing-litellm-server.md",
+            "docs/existing-litellm-databricks.md",
             "### 흐름 B: Microsoft Foundry GPT-5.6",
             "docs/claude-code-foundry-local.md",
             "docs/existing-litellm-foundry.md",
@@ -118,7 +123,7 @@ class DocumentationTests(unittest.TestCase):
         positions = [flows.index(value) for value in expected_order]
         self.assertEqual(positions, sorted(positions))
         self.assertIn(
-            "흐름 B는 1단계의 로컬 LiteLLM과 2단계의 기존 LiteLLM 서버 모두",
+            "로컬과 기존 서버 흐름 모두 LiteLLM의 Anthropic Messages 변환을 사용합니다",
             flows,
         )
         self.assertIn(
@@ -344,7 +349,7 @@ class DocumentationTests(unittest.TestCase):
         self.assertNotIn("Azure Foundry", guide)
 
         databricks_guide = (
-            ROOT / "docs" / "existing-litellm-server.md"
+            ROOT / "docs" / "existing-litellm-databricks.md"
         ).read_text(encoding="utf-8")
         self.assertNotIn("Microsoft Foundry", databricks_guide)
         self.assertNotIn("foundry-gpt-5.6", databricks_guide)
