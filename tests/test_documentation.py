@@ -271,6 +271,7 @@ class DocumentationTests(unittest.TestCase):
             "client_secret: os.environ/AZURE_CLIENT_SECRET",
             guide,
         )
+        self.assertNotIn("Azure OpenAI", guide)
 
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}

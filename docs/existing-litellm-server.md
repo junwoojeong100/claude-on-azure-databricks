@@ -228,8 +228,7 @@ VS Code extension도 사용한다면 VS Code 사용자 settings의
 
 > 공식 Microsoft Learn과 LiteLLM 문서 확인: 2026-08-01.
 
-Microsoft Foundry에서 다음 Azure OpenAI model deployment가 이미 생성되어 있어야
-합니다.
+Microsoft Foundry에서 다음 model deployment가 이미 생성되어 있어야 합니다.
 
 | 모델 ID | 현재 모델 버전 | 권장 LiteLLM alias |
 | --- | --- | --- |
@@ -243,9 +242,9 @@ Code의 Anthropic 전용 `[1m]` suffix는 붙이지 않습니다.
 
 Foundry portal에서 다음 값을 확인합니다.
 
-- Azure OpenAI resource endpoint
+- Microsoft Foundry resource endpoint
 - 각 모델의 실제 deployment name
-- Azure OpenAI v1 API 사용 가능 여부
+- Microsoft Foundry v1 API 사용 가능 여부
 - LiteLLM host에 연결할 managed identity
 - 해당 리전의 모델 가용성과 GPT-5.6 quota
 
@@ -271,14 +270,14 @@ LiteLLM host의 Azure portal **Identity** 화면에서 다음 중 하나를 활�
 - **User assigned**: 여러 host가 공유할 수 있는 identity를 연결합니다. 아래
   `AZURE_CLIENT_ID`에 이 identity의 client ID를 지정합니다.
 
-### 8.2 Azure OpenAI inference 권한 할당
+### 8.2 Microsoft Foundry inference 권한 할당
 
-Azure portal에서 GPT-5.6 deployment가 있는 Foundry/Azure OpenAI resource를 열고
+Azure portal에서 GPT-5.6 deployment가 있는 Microsoft Foundry resource를 열고
 **Access control (IAM)** > **Add role assignment**에서 LiteLLM host의 managed identity에
-**Cognitive Services OpenAI User** 역할을 할당합니다. Azure OpenAI v1 inference를
+**Cognitive Services OpenAI User** 역할을 할당합니다. Microsoft Foundry v1 inference를
 Microsoft Entra ID로 호출할 때 필요한 최소 역할입니다.
 
-역할은 deployment가 아니라 Azure OpenAI resource 범위에 할당합니다. 역할 전파에는
+역할은 deployment가 아니라 Microsoft Foundry resource 범위에 할당합니다. 역할 전파에는
 몇 분이 걸릴 수 있으므로 할당 직후 `401` 또는 `403`이 발생하면 잠시 기다린 뒤 다시
 검증합니다.
 
@@ -286,9 +285,9 @@ Microsoft Entra ID로 호출할 때 필요한 최소 역할입니다.
 
 | 변수 또는 placeholder | 값 | 확인 위치 |
 | --- | --- | --- |
-| `FOUNDRY_GPT_API_BASE` | Azure OpenAI resource endpoint host | Foundry portal 또는 Azure portal의 해당 resource **Keys and Endpoint** |
-| `FOUNDRY_GPT_API_VERSION` | `v1` | Portal secret이 아니라 LiteLLM에서 Azure OpenAI v1 route를 선택하는 고정값 |
-| `FOUNDRY_GPT_AZURE_SCOPE` | `https://ai.azure.com/.default` | Microsoft Azure OpenAI v1 API의 고정 Entra scope |
+| `FOUNDRY_GPT_API_BASE` | Microsoft Foundry resource endpoint host | Foundry portal 또는 Azure portal의 해당 resource **Keys and Endpoint** |
+| `FOUNDRY_GPT_API_VERSION` | `v1` | Portal secret이 아니라 LiteLLM에서 Microsoft Foundry v1 route를 선택하는 고정값 |
+| `FOUNDRY_GPT_AZURE_SCOPE` | `https://ai.azure.com/.default` | Microsoft Foundry v1 API의 고정 Entra scope |
 | `<sol-deployment-name>` 등 | 각 deployment의 **Deployment name** | Foundry portal의 **Models + endpoints** > **Deployments**. Model ID가 아니라 deployment name 사용 |
 | `AZURE_CLIENT_ID` | User-assigned managed identity의 client ID | Azure portal의 해당 managed identity **Overview**. System-assigned 방식에서는 설정하지 않음 |
 
@@ -498,7 +497,7 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 - [LiteLLM Claude Code quickstart](https://docs.litellm.ai/docs/tutorials/claude_responses_api)
 - [LiteLLM proxy configuration](https://docs.litellm.ai/docs/proxy/configs)
 - [LiteLLM GPT-5.6](https://docs.litellm.ai/blog/gpt_5_6)
-- [LiteLLM Azure OpenAI provider](https://docs.litellm.ai/docs/providers/azure)
+- [LiteLLM Microsoft Foundry 연결용 Azure provider](https://docs.litellm.ai/docs/providers/azure)
 - [LiteLLM Azure Responses API](https://docs.litellm.ai/docs/providers/azure/azure_responses)
 - [LiteLLM custom pricing과 base model](https://docs.litellm.ai/docs/proxy/custom_pricing)
 - [LiteLLM에서 non-Anthropic 모델 사용](https://docs.litellm.ai/docs/tutorials/claude_non_anthropic_models)
@@ -507,7 +506,7 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 - [Azure Databricks OAuth M2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m)
 - [Microsoft Foundry GPT-5.6 모델](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-56)
 - [Microsoft Foundry model endpoint와 deployment](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/endpoints)
-- [Azure OpenAI Responses API](https://learn.microsoft.com/azure/foundry/openai/how-to/responses)
-- [Azure OpenAI v1 API](https://learn.microsoft.com/azure/foundry/openai/api-version-lifecycle)
-- [Azure OpenAI RBAC 역할](https://learn.microsoft.com/azure/foundry-classic/openai/how-to/role-based-access-control)
+- [Microsoft Foundry Responses API](https://learn.microsoft.com/azure/foundry/openai/how-to/responses)
+- [Microsoft Foundry v1 API](https://learn.microsoft.com/azure/foundry/openai/api-version-lifecycle)
+- [Microsoft Foundry inference RBAC 역할](https://learn.microsoft.com/azure/foundry-classic/openai/how-to/role-based-access-control)
 - [Azure managed identity 개요](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview)
