@@ -226,6 +226,8 @@ VS Code extension도 사용한다면 VS Code 사용자 settings의
 이 단계는 앞의 Databricks Claude 연결이 정상 동작한 뒤 진행합니다. 기존 Databricks
 환경변수와 `model_list`는 변경하거나 삭제하지 않습니다.
 
+> 공식 Microsoft Learn과 LiteLLM 문서 확인: 2026-08-01.
+
 Microsoft Foundry에서 다음 Azure OpenAI model deployment가 이미 생성되어 있어야
 합니다.
 
@@ -243,14 +245,15 @@ Foundry portal에서 다음 값을 확인합니다.
 
 - Azure OpenAI resource endpoint
 - 각 모델의 실제 deployment name
-- 사용할 API version
+- Azure OpenAI v1 API 사용 가능 여부
 - API key 또는 Microsoft Entra identity
 - 해당 리전의 모델 가용성과 GPT-5.6 quota
 
 모델 ID와 deployment name은 다를 수 있습니다. 예를 들어 모델 ID가
 `gpt-5.6-sol`이어도 deployment name을 `prod-sol`로 만들었다면 LiteLLM backend에는
 `prod-sol`을 사용해야 합니다. 가능하면 deployment name에 `gpt-5.6`을 포함해 LiteLLM의
-모델 family 자동 인식과 비용 추적을 단순화하세요.
+모델 family 자동 인식을 단순화하세요. 비용과 context metadata는 아래 `base_model`로
+별도 지정합니다.
 
 ## 8. LiteLLM 서버에 Foundry credential 추가
 
@@ -258,14 +261,17 @@ Foundry portal에서 다음 값을 확인합니다.
 추가합니다.
 
 ```dotenv
-FOUNDRY_GPT_API_BASE=https://<resource-name>.openai.azure.com/
+FOUNDRY_GPT_API_BASE=https://<resource-name>.openai.azure.com
 FOUNDRY_GPT_API_KEY=<foundry-resource-api-key>
-FOUNDRY_GPT_API_VERSION=<api-version-supported-by-the-deployment>
+FOUNDRY_GPT_API_VERSION=v1
 ```
 
 `FOUNDRY_GPT_API_BASE`는 Foundry portal의 **Keys and Endpoint**에 표시된 Azure OpenAI
-resource endpoint를 사용합니다. LiteLLM의 `azure/` provider가 request path를 구성하므로
-이 예시에서는 `/openai/v1`, `/chat/completions`, `/responses`를 붙이지 않습니다.
+resource endpoint host를 사용합니다. 리소스에 따라 `*.openai.azure.com` 또는
+`*.services.ai.azure.com` host가 표시될 수 있으므로 예시의 host를 추측하지 말고 portal
+값을 사용합니다. 끝의 `/` 유무는 현재 LiteLLM URL helper가 정규화하지만, endpoint에
+`/openai/v1`, `/chat/completions`, `/responses`는 붙이지 않습니다. `api_version: v1`은
+LiteLLM이 resource endpoint 뒤에 `/openai/v1/` 경로를 선택하도록 하는 값입니다.
 
 운영 환경에서는 API key보다 Microsoft Entra 인증을 권장합니다. Azure에서 실행되는
 LiteLLM은 지원되는 LiteLLM 버전과 hosting 환경에서 managed identity를 우선 검토하고,
@@ -278,6 +284,10 @@ AZURE_CLIENT_ID=<service-principal-client-id>
 AZURE_CLIENT_SECRET=<service-principal-client-secret>
 FOUNDRY_GPT_AZURE_SCOPE=https://ai.azure.com/.default
 ```
+
+이 scope는 Microsoft의 Azure OpenAI v1 API 예시와 맞습니다. 날짜 기반 legacy API를
+사용하는 기존 LiteLLM 구성은 `https://cognitiveservices.azure.com/.default`를 사용할 수
+있으므로, v1과 legacy 설정의 scope를 섞지 않습니다.
 
 API key와 service principal secret을 동시에 `config.yaml`에 직접 입력하지 않습니다.
 먼저 API key로 연결을 검증한 뒤 Entra 인증으로 전환한다면 한 번에 한 인증 방식만
@@ -295,30 +305,36 @@ model_list:
 
   - model_name: foundry-gpt-5.6-sol
     litellm_params:
-      model: azure/gpt5_series/<sol-deployment-name>
+      model: azure/responses/<sol-deployment-name>
       api_base: os.environ/FOUNDRY_GPT_API_BASE
       api_key: os.environ/FOUNDRY_GPT_API_KEY
       api_version: os.environ/FOUNDRY_GPT_API_VERSION
+    model_info:
+      base_model: azure/gpt-5.6-sol
 
   - model_name: foundry-gpt-5.6-terra
     litellm_params:
-      model: azure/gpt5_series/<terra-deployment-name>
+      model: azure/responses/<terra-deployment-name>
       api_base: os.environ/FOUNDRY_GPT_API_BASE
       api_key: os.environ/FOUNDRY_GPT_API_KEY
       api_version: os.environ/FOUNDRY_GPT_API_VERSION
+    model_info:
+      base_model: azure/gpt-5.6-terra
 
   - model_name: foundry-gpt-5.6-luna
     litellm_params:
-      model: azure/gpt5_series/<luna-deployment-name>
+      model: azure/responses/<luna-deployment-name>
       api_base: os.environ/FOUNDRY_GPT_API_BASE
       api_key: os.environ/FOUNDRY_GPT_API_KEY
       api_version: os.environ/FOUNDRY_GPT_API_VERSION
+    model_info:
+      base_model: azure/gpt-5.6-luna
 ```
 
-Deployment name 자체가 `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`라면
-`azure/gpt-5.6-sol`처럼 `gpt5_series/` 없이 등록해도 LiteLLM이 GPT-5 family를
-자동 인식합니다. 이름과 무관하게 확실히 GPT-5 변환을 적용하려면 위 예시의
-`azure/gpt5_series/<deployment-name>` 형식을 사용합니다.
+`azure/responses/<deployment-name>`은 LiteLLM의 `/v1/responses`와 Claude Code가
+사용하는 `/v1/messages` 변환을 모두 Azure Responses API로 보냅니다. Chat Completions
+전용 alias가 별도로 필요하다면 `azure/gpt5_series/<deployment-name>`을 추가할 수
+있지만, 그 형식을 위 Claude Code alias 대신 사용하지 않습니다.
 
 Service principal 인증을 사용하는 경우 각 모델의 `api_key` 줄을 제거하고 다음 필드를
 같은 `litellm_params` 아래에 추가합니다.
@@ -330,10 +346,15 @@ Service principal 인증을 사용하는 경우 각 모델의 `api_key` 줄을 �
       azure_scope: os.environ/FOUNDRY_GPT_AZURE_SCOPE
 ```
 
+`base_model`은 custom deployment name과 실제 GPT-5.6 tier를 연결해 cost와 context
+metadata를 정확히 선택합니다. 위 예시는 Global Standard 가격 key입니다. US 또는 EU
+지역 가격을 적용해야 한다면 LiteLLM cost map의 `azure/us/gpt-5.6-*` 또는
+`azure/eu/gpt-5.6-*` key를 사용합니다. 별도 계약 가격은 `model_info`의 token별 pricing
+필드로 override합니다.
+
 LiteLLM이 로컬 cost map만 사용한다면 GPT-5.6 metadata가 포함된 버전을 사용하거나 최신
 cost map을 다시 불러옵니다. Admin UI의 **Reload Model Cost Map** 또는 기존 운영 절차의
-`POST /reload/model_cost_map`을 사용하고, 실제 Azure 계약 가격이 다르면 별도 pricing
-override를 적용합니다.
+`POST /reload/model_cost_map`은 LiteLLM 1.76.0 이상에서 사용할 수 있습니다.
 
 ## 10. Foundry route를 순서대로 검증
 
@@ -387,7 +408,10 @@ curl -sS "$LITELLM_BASE_URL/v1/messages" \
 
 `/v1/responses`는 성공하고 `/v1/messages`만 실패하면 Foundry deployment보다 LiteLLM의
 Anthropic-to-Responses 변환 호환성을 먼저 확인합니다. LiteLLM 버전을 변경하기 전에는
-현재 stable 버전의 Claude Code 호환성 문서와 release note를 검토하세요.
+현재 stable 버전의 non-Anthropic 모델 가이드와 release note를 검토하세요. LiteLLM의
+Claude Code compatibility matrix는 Azure Foundry의 Claude tier를 자동 검증하지만
+GPT-5.6 Sol, Terra, Luna를 직접 인증하는 표는 아니므로 실제 기능별 smoke test를
+대체하지 않습니다.
 
 ## 11. Claude Code에서 Foundry 모델 노출
 
@@ -442,7 +466,7 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 | Foundry `401` 또는 `403` | API key, Entra identity, resource endpoint와 RBAC |
 | GPT-5.6 deployment 생성 실패 | 리전 가용성, subscription quota tier와 quota request |
 | `/model`에 Foundry alias가 없음 | gateway discovery, Claude Code 버전, virtual key 모델 권한 |
-| 비용이 unknown으로 표시됨 | LiteLLM cost map 갱신, deployment name, pricing override |
+| 비용이 unknown으로 표시됨 | `model_info.base_model`, cost map 갱신, pricing override |
 
 ## 공식 문서
 
@@ -451,9 +475,12 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 - [LiteLLM proxy configuration](https://docs.litellm.ai/docs/proxy/configs)
 - [LiteLLM GPT-5.6](https://docs.litellm.ai/blog/gpt_5_6)
 - [LiteLLM Azure OpenAI provider](https://docs.litellm.ai/docs/providers/azure)
+- [LiteLLM Azure Responses API](https://docs.litellm.ai/docs/providers/azure/azure_responses)
+- [LiteLLM custom pricing과 base model](https://docs.litellm.ai/docs/proxy/custom_pricing)
 - [LiteLLM에서 non-Anthropic 모델 사용](https://docs.litellm.ai/docs/tutorials/claude_non_anthropic_models)
 - [LiteLLM Messages-to-Responses mapping](https://docs.litellm.ai/docs/anthropic_unified/messages_to_responses_mapping)
 - [Claude Code LLM gateway 연결](https://code.claude.com/docs/en/llm-gateway-connect)
 - [Azure Databricks OAuth M2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m)
 - [Microsoft Foundry GPT-5.6 모델](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-56)
 - [Azure OpenAI Responses API](https://learn.microsoft.com/azure/foundry/openai/how-to/responses)
+- [Azure OpenAI v1 API](https://learn.microsoft.com/azure/foundry/openai/api-version-lifecycle)
