@@ -111,6 +111,11 @@ Invoke-RestMethod `
 
 Databricks API 호출이 성공한 같은 터미널에서 Claude Code를 실행합니다.
 
+`~/.claude/settings.json`에 기존 Foundry 또는 gateway route가 있으면 그 `env` 값이
+shell 환경변수보다 우선합니다. `/status`에 다른 base URL이 표시되면 설정 파일을
+백업한 뒤 기존 `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` 또는 `apiKeyHelper`,
+model 값을 제거하거나 Databricks 값으로 바꾸고 Claude Code를 다시 시작합니다.
+
 ### macOS, Linux, WSL
 
 ```bash

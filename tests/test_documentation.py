@@ -134,6 +134,10 @@ class DocumentationTests(unittest.TestCase):
             "기존 LiteLLM 서버를 통해 Claude Code를 Foundry GPT-5.6에 연결",
             flows,
         )
+        self.assertIn(
+            "`env` 값은 shell 환경변수보다 우선",
+            flows,
+        )
 
     def test_core_guides_have_explicit_scope_and_completion(self) -> None:
         guides = {
@@ -161,6 +165,14 @@ class DocumentationTests(unittest.TestCase):
                 self.assertTrue(guide.startswith(title))
                 self.assertIn(step, guide)
                 self.assertIn("**완료 기준:**", guide)
+
+        for filename in (
+            "claude-code-databricks.md",
+            "claude-code-foundry-local.md",
+        ):
+            guide = (ROOT / "docs" / filename).read_text(encoding="utf-8")
+            with self.subTest(filename=filename):
+                self.assertIn("shell 환경변수보다 우선", guide)
 
     def test_claude_guide_covers_required_configuration(self) -> None:
         guide_path = ROOT / "docs" / "claude-code-databricks.md"

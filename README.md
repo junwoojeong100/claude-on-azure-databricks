@@ -30,6 +30,11 @@ OpenAI Responses API를 변환합니다.
 > Foundry GPT-5.6은 Claude Code가 OpenAI Responses API를 직접 호출할 수 없으므로
 > 로컬과 기존 서버 흐름 모두 LiteLLM의 Anthropic Messages 변환을 사용합니다.
 
+> 한 번에 하나의 Claude Code route만 활성화하세요. `~/.claude/settings.json`의
+> `env` 값은 shell 환경변수보다 우선하므로 다른 흐름으로 전환할 때 기존
+> `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` 또는 `apiKeyHelper`, model mapping을
+> 바꾸고 Claude Code를 다시 시작해야 합니다.
+
 ## 2. 5분 연결: 기존 Databricks workspace
 
 다음 세 값이 준비되어 있으면 바로 시작할 수 있습니다.

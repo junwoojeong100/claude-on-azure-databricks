@@ -227,6 +227,12 @@ done
 
 먼저 현재 shell에서 임시로 설정합니다.
 
+`~/.claude/settings.json`에 기존 Databricks 또는 다른 gateway route가 있으면 그
+`env` 값이 shell 환경변수보다 우선합니다. `/status`에 `127.0.0.1:4000`이 아닌 base
+URL이 표시되면 설정 파일을 백업한 뒤 기존 `ANTHROPIC_BASE_URL`,
+`ANTHROPIC_AUTH_TOKEN` 또는 `apiKeyHelper`, model 값을 제거하고 Claude Code를 다시
+시작합니다.
+
 ```bash
 export ANTHROPIC_BASE_URL="http://127.0.0.1:4000"
 export ANTHROPIC_AUTH_TOKEN="$LITELLM_KEY"
@@ -276,7 +282,11 @@ done
 ```
 
 이 리포의 `scripts/configure_claude_code.py`는 Databricks 직접 연결용이므로 실행하지
-않습니다. VS Code extension을 사용하면 VS Code 사용자 settings의
+않습니다. 이전 Databricks 설정의 `ANTHROPIC_DEFAULT_*`와
+`ANTHROPIC_CUSTOM_MODEL_OPTION*`이 남아 있으면 local Foundry에 없는 alias를 가리키므로
+제거합니다.
+
+VS Code extension을 사용하면 VS Code 사용자 settings의
 `claudeCode.environmentVariables`에도 같은 네 환경변수를 설정합니다.
 
 로컬 proxy가 실행 중이지 않으면 Claude Code 연결도 실패합니다. 상시 운영, 중앙
@@ -286,6 +296,10 @@ managed identity 방식으로 전환합니다.
 
 > **완료 기준:** 로컬 LiteLLM이 `127.0.0.1:4000`에서 실행 중이고, `/model`의
 > **From gateway**에 세 alias가 표시되며 세 Claude Code 테스트가 모두 성공합니다.
+
+다른 흐름으로 전환할 때는 proxy 터미널에서 Ctrl-C를 누르고
+`~/.claude/settings.json`의 local Foundry URL, key와 model mapping을 다음 흐름의
+값으로 교체합니다. Shell에 export한 값도 새 터미널을 열거나 unset한 뒤 사용합니다.
 
 ## 문제 해결
 
