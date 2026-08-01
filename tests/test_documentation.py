@@ -262,6 +262,9 @@ class DocumentationTests(unittest.TestCase):
             "ManagedIdentityCredential",
             "managed identity token acquired",
             "LiteLLM process 전체에 적용됩니다",
+            "AZURE_OPENAI_API_KEY",
+            "입력 한도는 922,000 tokens",
+            "/health/readiness",
         ):
             self.assertIn(required_text, guide)
 

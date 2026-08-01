@@ -140,18 +140,22 @@ Workspace에서 호출할 수 없는 모델은 등록하지 않습니다. `[1m]`
 maintenance 절차를 사용해 LiteLLM을 다시 시작합니다. 단일 인스턴스를 즉시 재시작하면
 기존 사용자 요청이 중단될 수 있습니다.
 
-재시작 후 health endpoint를 확인합니다.
-
-```bash
-curl -fsS "https://<litellm-host>/health"
-```
-
-그다음 LiteLLM virtual key로 Anthropic Messages endpoint를 직접 호출합니다.
+재시작 후 LiteLLM key를 준비하고, 실제 모델 호출을 수행하는 authenticated health
+endpoint를 확인합니다. `/health`는 모델마다 소량의 token을 사용할 수 있습니다.
 
 ```bash
 export LITELLM_BASE_URL="https://<litellm-host>"
 export LITELLM_KEY="<litellm-virtual-key>"
 
+curl -fsS "$LITELLM_BASE_URL/health" \
+  -H "Authorization: Bearer $LITELLM_KEY"
+```
+
+Process와 database readiness만 확인하는 load balancer probe에는 인증이 필요 없는
+`/health/liveliness`와 `/health/readiness`를 사용합니다. 그다음 LiteLLM virtual key로
+Anthropic Messages endpoint를 직접 호출합니다.
+
+```bash
 curl -sS "$LITELLM_BASE_URL/v1/messages" \
   -H "Authorization: Bearer $LITELLM_KEY" \
   -H "anthropic-version: 2023-06-01" \
@@ -236,9 +240,11 @@ Microsoft Foundry에서 다음 model deployment가 이미 생성되어 있어야
 | `gpt-5.6-terra` | `2026-07-09` | `foundry-gpt-5.6-terra` |
 | `gpt-5.6-luna` | `2026-07-09` | `foundry-gpt-5.6-luna` |
 
-세 모델은 Responses API와 Chat Completions API, reasoning, structured output, image input,
-function calling을 지원합니다. 모델 context window는 1,050,000 tokens이지만 Claude
-Code의 Anthropic 전용 `[1m]` suffix는 붙이지 않습니다.
+세 모델은 Responses API와 Chat Completions API, reasoning, structured output, image
+input, function calling을 지원합니다. 각 모델의 context window는 1,050,000 tokens,
+입력 한도는 922,000 tokens, 최대 output은 128,000 tokens입니다. 입력, 출력과 reasoning
+token은 같은 context budget을 사용하므로 이 한도들을 서로 더한 용량을 한 요청에서
+보장하지 않습니다. Claude Code의 Anthropic 전용 `[1m]` suffix는 붙이지 않습니다.
 
 Foundry portal에서 다음 값을 확인합니다.
 
@@ -269,6 +275,12 @@ LiteLLM host의 Azure portal **Identity** 화면에서 다음 중 하나를 활�
   필요하지 않습니다.
 - **User assigned**: 여러 host가 공유할 수 있는 identity를 연결합니다. 아래
   `AZURE_CLIENT_ID`에 이 identity의 client ID를 지정합니다.
+
+Microsoft Foundry resource의 public network access가 비활성화되어 있거나 IP/VNet
+제한이 있다면 LiteLLM host가 허용된 network에 있어야 합니다. Private endpoint를
+사용하는 경우 host에서 resource hostname이 private IP로 해석되는지와 outbound
+TCP 443 연결을 함께 확인합니다. `PublicNetworkAccessDisabled` 또는 network ACL 관련
+`403`은 RBAC 역할을 추가해도 해결되지 않습니다.
 
 ### 8.2 Microsoft Foundry inference 권한 할당
 
@@ -313,6 +325,35 @@ host가 표시될 수 있으므로 portal 값을 사용합니다.
 
 `FOUNDRY_GPT_API_KEY`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`은 설정하지 않습니다.
 System-assigned identity에서는 `AZURE_CLIENT_ID`도 설정하지 않습니다.
+
+LiteLLM은 모델에 `api_key`가 없더라도 process의 `AZURE_OPENAI_API_KEY` 또는
+`AZURE_API_KEY`가 설정되어 있으면 API key를 managed identity보다 먼저 사용합니다.
+또한 `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`이 모두 있으면
+service principal credential을 선택하며, `AZURE_CREDENTIAL`은 자동 선택을 override할
+수 있습니다. 같은 runtime에서 아래 이름이 설정되어 있는지 값은 출력하지 않고
+확인합니다.
+
+```bash
+env | cut -d= -f1 | grep -E \
+  '^(AZURE_OPENAI_API_KEY|AZURE_API_KEY|AZURE_CLIENT_SECRET|AZURE_TENANT_ID|AZURE_CREDENTIAL|AZURE_AD_TOKEN)$' \
+  || true
+```
+
+이 가이드를 managed identity 전용으로 적용하려면 위 전역 credential을 LiteLLM
+process에서 제거합니다. 기존 Azure 모델이 전역 `AZURE_API_KEY` 자동 인식에 의존한다면
+그 모델 항목에 별도 이름의 환경변수를 명시적으로 연결한 뒤 전역 변수를 제거합니다.
+
+```yaml
+  - model_name: existing-azure-model
+    litellm_params:
+      model: azure/<existing-deployment-name>
+      api_base: os.environ/EXISTING_AZURE_API_BASE
+      api_key: os.environ/EXISTING_AZURE_API_KEY
+      api_version: os.environ/EXISTING_AZURE_API_VERSION
+```
+
+이 분리가 불가능하면 API key 기반 모델과 managed identity 기반 Foundry 모델을 서로
+다른 LiteLLM instance에서 운영합니다.
 
 ### 8.4 재시작 전 managed identity 확인
 
@@ -389,8 +430,8 @@ litellm_settings:
 
 `azure/responses/<deployment-name>`은 LiteLLM의 `/v1/responses`와 Claude Code가
 사용하는 `/v1/messages` 변환을 모두 Azure Responses API로 보냅니다. Chat Completions
-전용 alias가 별도로 필요하다면 `azure/gpt5_series/<deployment-name>`을 추가할 수
-있지만, 그 형식을 위 Claude Code alias 대신 사용하지 않습니다.
+경로용 alias가 별도로 필요하다면 `azure/gpt5_series/<deployment-name>`을 추가할 수
+있지만, 그 형식을 위 Responses 기반 Claude Code alias 대신 사용하지 않습니다.
 
 System-assigned 방식에서 LiteLLM은 `DefaultAzureCredential` 경로로 host identity를
 사용합니다. User-assigned 방식은 `AZURE_CLIENT_ID`만 설정되어 있으면 LiteLLM이
@@ -402,13 +443,15 @@ System-assigned 방식에서 LiteLLM은 `DefaultAzureCredential` 경로로 host 
 아니라 LiteLLM process 전체에 적용됩니다. 기존에 API key 없이 `azure/...` provider를
 사용하는 모델이 있다면 같은 managed identity를 사용해도 되는지와 각 모델의
 `azure_scope`가 올바른지 먼저 확인합니다. 서로 다른 user-assigned identity가 필요하면
-한 process에 이 설정을 혼합하지 말고 LiteLLM instance를 분리합니다. 명시적인 API key를
-사용하는 기존 모델은 해당 key 설정을 그대로 유지합니다.
+한 process에 이 설정을 혼합하지 말고 LiteLLM instance를 분리합니다. 모델 항목에
+명시적인 `api_key`가 있는 기존 모델은 해당 설정을 유지할 수 있지만, 전역
+`AZURE_OPENAI_API_KEY` 또는 `AZURE_API_KEY` 자동 인식에는 의존하지 않습니다.
 
 `base_model`은 custom deployment name과 실제 GPT-5.6 tier를 연결해 cost와 context
 metadata를 정확히 선택합니다. 위 예시는 Global Standard 가격 key입니다. US 또는 EU
-지역 가격을 적용해야 한다면 LiteLLM cost map의 `azure/us/gpt-5.6-*` 또는
-`azure/eu/gpt-5.6-*` key를 사용합니다. 별도 계약 가격은 `model_info`의 token별 pricing
+Data Zone deployment라면 LiteLLM cost map의 `azure/us/gpt-5.6-*` 또는
+`azure/eu/gpt-5.6-*` key를 사용합니다. Resource의 위치만 보고 선택하지 말고 실제
+deployment type을 기준으로 결정합니다. 별도 계약 가격은 `model_info`의 token별 pricing
 필드로 override합니다.
 
 LiteLLM이 로컬 cost map만 사용한다면 GPT-5.6 metadata가 포함된 버전을 사용하거나 최신
@@ -523,6 +566,9 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 | `[1m]` 모델을 찾지 못함 | LiteLLM alias에서 `[1m]` 제거, Claude Code 최신 버전 |
 | Foundry `404 DeploymentNotFound` | model ID가 아니라 실제 deployment name을 사용했는지 |
 | Foundry `401` 또는 `403` | host의 managed identity 활성화, `Cognitive Services OpenAI User` 역할, scope와 resource endpoint |
+| `PublicNetworkAccessDisabled` 또는 network ACL `403` | Foundry public access 설정, private endpoint, VNet/IP allowlist, private DNS |
+| managed identity 대신 API key가 사용됨 | process 전역 `AZURE_OPENAI_API_KEY`, `AZURE_API_KEY` 또는 model-level `api_key` |
+| managed identity 대신 service principal이 사용됨 | process 전역 `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_CREDENTIAL` |
 | managed identity token 획득 실패 | `azure-identity` 설치, host identity 연결, user-assigned identity의 `AZURE_CLIENT_ID`, identity endpoint 접근 |
 | 기존 keyless Azure 모델 인증이 바뀜 | process 전역 `AZURE_CLIENT_ID`와 `enable_azure_ad_token_refresh`, 동일 identity 사용 가능 여부 |
 | GPT-5.6 deployment 생성 실패 | 리전 가용성, subscription quota tier와 quota request |
@@ -547,4 +593,5 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 - [Microsoft Foundry Responses API](https://learn.microsoft.com/azure/foundry/openai/how-to/responses)
 - [Microsoft Foundry v1 API](https://learn.microsoft.com/azure/foundry/openai/api-version-lifecycle)
 - [Microsoft Foundry inference RBAC 역할](https://learn.microsoft.com/azure/foundry-classic/openai/how-to/role-based-access-control)
+- [Microsoft Foundry private link](https://learn.microsoft.com/azure/foundry/how-to/configure-private-link)
 - [Azure managed identity 개요](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview)
