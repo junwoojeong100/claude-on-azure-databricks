@@ -257,8 +257,33 @@ Foundry portal에서 다음 값을 확인합니다.
 
 ## 8. LiteLLM 서버에 Foundry credential 추가
 
-가장 간단한 검증 경로는 resource API key입니다. 기존 Secret 관리 위치에 다음 값을
-추가합니다.
+Foundry backend 호출에는 인증이 필요하지만 **API key가 반드시 필요한 것은 아닙니다**.
+API key, service principal, managed identity 중 하나를 선택합니다. 세 deployment가 같은
+Foundry resource에 있으면 endpoint와 인증 정보 하나를 세 모델이 공유하므로 모델별 key를
+만들지 않습니다.
+
+### 변수값 확인 위치
+
+| 변수 또는 placeholder | 값 | 확인 위치 |
+| --- | --- | --- |
+| `FOUNDRY_GPT_API_BASE` | Azure OpenAI resource endpoint host | Foundry portal의 resource **Keys and Endpoint**, 또는 Azure portal의 해당 Foundry resource **Keys and Endpoint** |
+| `FOUNDRY_GPT_API_KEY` | Resource의 Key 1 또는 Key 2 | 같은 **Keys and Endpoint** 화면. API key 방식에서만 사용 |
+| `FOUNDRY_GPT_API_VERSION` | `v1` | Portal에서 복사하는 secret이 아니라 이 가이드에서 사용하는 LiteLLM Azure v1 route 선택값 |
+| `<sol-deployment-name>` 등 | 각 deployment의 **Deployment name** | Foundry portal의 **Models + endpoints** > **Deployments**. Model ID가 아니라 deployment name 사용 |
+| `AZURE_TENANT_ID` | Directory (tenant) ID | Microsoft Entra admin center의 **Entra ID** > **Overview** |
+| `AZURE_CLIENT_ID` | Application (client) ID | Service principal은 **App registrations** > 해당 앱 > **Overview**. User-assigned managed identity는 해당 identity의 **Overview** |
+| `AZURE_CLIENT_SECRET` | Client secret의 **Value** | **App registrations** > 해당 앱 > **Certificates & secrets**. Secret ID가 아니며 service principal 방식에서만 사용 |
+| `FOUNDRY_GPT_AZURE_SCOPE` | `https://ai.azure.com/.default` | Azure OpenAI v1 API의 고정 Entra scope |
+
+`FOUNDRY_GPT_API_BASE`에는 `/openai/v1`, `/chat/completions`, `/responses`를 붙이지
+않습니다. 리소스에 따라 `*.openai.azure.com` 또는 `*.services.ai.azure.com` host가
+표시될 수 있으므로 portal 값을 사용합니다. 끝의 `/` 유무는 현재 LiteLLM URL helper가
+정규화합니다. `api_version: v1`은 LiteLLM이 resource endpoint 뒤에 `/openai/v1/`
+경로를 선택하도록 하는 값입니다.
+
+### 선택 A: API key
+
+가장 간단한 smoke test 방식입니다. 기존 Secret 관리 위치에 다음 값을 추가합니다.
 
 ```dotenv
 FOUNDRY_GPT_API_BASE=https://<resource-name>.openai.azure.com
@@ -266,28 +291,49 @@ FOUNDRY_GPT_API_KEY=<foundry-resource-api-key>
 FOUNDRY_GPT_API_VERSION=v1
 ```
 
-`FOUNDRY_GPT_API_BASE`는 Foundry portal의 **Keys and Endpoint**에 표시된 Azure OpenAI
-resource endpoint host를 사용합니다. 리소스에 따라 `*.openai.azure.com` 또는
-`*.services.ai.azure.com` host가 표시될 수 있으므로 예시의 host를 추측하지 말고 portal
-값을 사용합니다. 끝의 `/` 유무는 현재 LiteLLM URL helper가 정규화하지만, endpoint에
-`/openai/v1`, `/chat/completions`, `/responses`는 붙이지 않습니다. `api_version: v1`은
-LiteLLM이 resource endpoint 뒤에 `/openai/v1/` 경로를 선택하도록 하는 값입니다.
+Key 1과 Key 2 중 하나만 사용합니다. 두 key는 rotation을 위한 resource-level
+credential이며 Sol, Terra, Luna가 같은 resource에 배포됐다면 같은 key를 공유합니다.
 
-운영 환경에서는 API key보다 Microsoft Entra 인증을 권장합니다. Azure에서 실행되는
-LiteLLM은 지원되는 LiteLLM 버전과 hosting 환경에서 managed identity를 우선 검토하고,
-그 외 환경은 최소 권한의 service principal을 사용합니다. Service principal 방식을
-사용한다면 다음 Secret을 준비합니다.
+### 선택 B: Service principal
+
+Azure 밖에서 실행되는 LiteLLM처럼 managed identity를 사용할 수 없는 운영 환경에
+적합합니다. 다음 Secret을 준비합니다.
 
 ```dotenv
+FOUNDRY_GPT_API_BASE=https://<resource-name>.openai.azure.com
+FOUNDRY_GPT_API_VERSION=v1
 AZURE_TENANT_ID=<tenant-id>
 AZURE_CLIENT_ID=<service-principal-client-id>
 AZURE_CLIENT_SECRET=<service-principal-client-secret>
 FOUNDRY_GPT_AZURE_SCOPE=https://ai.azure.com/.default
 ```
 
-이 scope는 Microsoft의 Azure OpenAI v1 API 예시와 맞습니다. 날짜 기반 legacy API를
-사용하는 기존 LiteLLM 구성은 `https://cognitiveservices.azure.com/.default`를 사용할 수
-있으므로, v1과 legacy 설정의 scope를 섞지 않습니다.
+Service principal에 Azure portal의 해당 Foundry/Azure OpenAI resource
+**Access control (IAM)**에서 **Cognitive Services OpenAI User** 역할을 할당합니다.
+`AZURE_CLIENT_SECRET`에는 secret을 생성할 때 한 번 표시되는 **Value**를 저장하며
+configuration 파일이나 source control에 직접 기록하지 않습니다.
+
+### 선택 C: Managed identity
+
+Azure VM, App Service, Container Apps 또는 AKS처럼 managed identity를 지원하는 환경의
+운영 LiteLLM에는 이 방식을 우선 사용합니다. LiteLLM host에 system-assigned 또는
+user-assigned managed identity를 연결하고, 해당 identity에 Foundry/Azure OpenAI
+resource 범위의 **Cognitive Services OpenAI User** 역할을 할당합니다.
+
+```dotenv
+FOUNDRY_GPT_API_BASE=https://<resource-name>.openai.azure.com
+FOUNDRY_GPT_API_VERSION=v1
+FOUNDRY_GPT_AZURE_SCOPE=https://ai.azure.com/.default
+```
+
+System-assigned identity는 별도 client ID나 secret이 없습니다. User-assigned identity를
+선택해야 한다면 host 환경에 그 identity의 client ID를 `AZURE_CLIENT_ID`로 설정합니다.
+`AZURE_CLIENT_SECRET`과 `FOUNDRY_GPT_API_KEY`는 설정하지 않습니다.
+
+Microsoft Entra 방식의 scope는 Azure OpenAI v1 API 예시와 맞습니다. 날짜 기반 legacy
+API를 사용하는 기존 LiteLLM 구성은
+`https://cognitiveservices.azure.com/.default`를 사용할 수 있으므로, v1과 legacy
+설정의 scope를 섞지 않습니다.
 
 API key와 service principal secret을 동시에 `config.yaml`에 직접 입력하지 않습니다.
 먼저 API key로 연결을 검증한 뒤 Entra 인증으로 전환한다면 한 번에 한 인증 방식만
@@ -298,6 +344,9 @@ API key와 service principal secret을 동시에 `config.yaml`에 직접 입력�
 앞의 Databricks 항목 아래에 세 deployment를 추가합니다. 아래
 `<sol-deployment-name>`, `<terra-deployment-name>`, `<luna-deployment-name>`은 Foundry
 portal에 표시되는 실제 deployment name으로 바꿉니다.
+
+다음은 **API key 방식**의 전체 예시입니다. `api_key`는 모델별 key가 아니라 같은
+resource key 환경변수를 세 항목이 함께 참조합니다.
 
 ```yaml
 model_list:
@@ -337,7 +386,8 @@ model_list:
 있지만, 그 형식을 위 Claude Code alias 대신 사용하지 않습니다.
 
 Service principal 인증을 사용하는 경우 각 모델의 `api_key` 줄을 제거하고 다음 필드를
-같은 `litellm_params` 아래에 추가합니다.
+같은 `litellm_params` 아래에 추가합니다. 나머지 model entry는 API key 예시와
+동일합니다.
 
 ```yaml
       tenant_id: os.environ/AZURE_TENANT_ID
@@ -345,6 +395,31 @@ Service principal 인증을 사용하는 경우 각 모델의 `api_key` 줄을 �
       client_secret: os.environ/AZURE_CLIENT_SECRET
       azure_scope: os.environ/FOUNDRY_GPT_AZURE_SCOPE
 ```
+
+Managed identity 인증을 사용하는 경우 각 모델에서 `api_key`, `tenant_id`, `client_id`,
+`client_secret`을 모두 생략하고 `azure_scope`만 유지합니다. 기존 최상위
+`litellm_settings`가 있다면 새로 만들지 말고 아래 값을 병합합니다.
+
+```yaml
+model_list:
+  - model_name: foundry-gpt-5.6-sol
+    litellm_params:
+      model: azure/responses/<sol-deployment-name>
+      api_base: os.environ/FOUNDRY_GPT_API_BASE
+      api_version: os.environ/FOUNDRY_GPT_API_VERSION
+      azure_scope: os.environ/FOUNDRY_GPT_AZURE_SCOPE
+    model_info:
+      base_model: azure/gpt-5.6-sol
+
+  # Terra와 Luna도 같은 형태로 추가합니다.
+
+litellm_settings:
+  enable_azure_ad_token_refresh: true
+```
+
+이 설정에서 LiteLLM은 `DefaultAzureCredential` 경로로 token을 자동 갱신합니다.
+운영 host에는 의도한 managed identity만 사용할 수 있도록 불필요한 Azure CLI login과
+service principal 환경변수를 두지 않습니다.
 
 `base_model`은 custom deployment name과 실제 GPT-5.6 tier를 연결해 cost와 context
 metadata를 정확히 선택합니다. 위 예시는 Global Standard 가격 key입니다. US 또는 EU
@@ -482,5 +557,10 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 - [Claude Code LLM gateway 연결](https://code.claude.com/docs/en/llm-gateway-connect)
 - [Azure Databricks OAuth M2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m)
 - [Microsoft Foundry GPT-5.6 모델](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-56)
+- [Microsoft Foundry model endpoint와 deployment](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/endpoints)
 - [Azure OpenAI Responses API](https://learn.microsoft.com/azure/foundry/openai/how-to/responses)
 - [Azure OpenAI v1 API](https://learn.microsoft.com/azure/foundry/openai/api-version-lifecycle)
+- [Azure OpenAI RBAC 역할](https://learn.microsoft.com/azure/foundry-classic/openai/how-to/role-based-access-control)
+- [Microsoft Entra app registration](https://learn.microsoft.com/entra/identity-platform/quickstart-register-app)
+- [Microsoft Entra client credential 관리](https://learn.microsoft.com/entra/identity-platform/how-to-add-credentials)
+- [Azure managed identity 개요](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview)
