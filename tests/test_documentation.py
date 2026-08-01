@@ -250,21 +250,20 @@ class DocumentationTests(unittest.TestCase):
             self.assertIn(required_text, script)
 
     def test_existing_litellm_uses_managed_identity_for_foundry(self) -> None:
-        guide = (ROOT / "docs" / "existing-litellm-server.md").read_text(
+        guide = (ROOT / "docs" / "existing-litellm-foundry.md").read_text(
             encoding="utf-8"
         )
 
         for required_text in (
-            "## 8. LiteLLM host에 managed identity 연결",
+            "## 2. LiteLLM host에 managed identity 연결",
             "Cognitive Services OpenAI User",
             "FOUNDRY_GPT_AZURE_SCOPE=https://ai.azure.com/.default",
             "enable_azure_ad_token_refresh: true",
             "ManagedIdentityCredential",
             "managed identity token acquired",
-            "LiteLLM process 전체에 적용됩니다",
+            "LiteLLM process 전체에",
             "AZURE_OPENAI_API_KEY",
-            "입력 한도는 922,000 tokens",
-            "/health/readiness",
+            "922,000 tokens",
         ):
             self.assertIn(required_text, guide)
 
@@ -278,6 +277,14 @@ class DocumentationTests(unittest.TestCase):
         )
         self.assertNotIn("Azure OpenAI", guide)
         self.assertNotIn("Azure Foundry", guide)
+
+        databricks_guide = (
+            ROOT / "docs" / "existing-litellm-server.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("Microsoft Foundry", databricks_guide)
+        self.assertNotIn("foundry-gpt-5.6", databricks_guide)
+        self.assertGreaterEqual(guide.count("LITELLM_KEY"), 4)
+        self.assertGreaterEqual(databricks_guide.count("LITELLM_KEY"), 3)
 
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}

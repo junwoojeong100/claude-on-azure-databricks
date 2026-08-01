@@ -133,7 +133,8 @@ Claude Code 설정을 변경하지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 추
 | 목적 | 가이드 |
 | --- | --- |
 | 단일 모델만 유지하는 최소 설정 | [단일 모델 최소 설정](docs/claude-code-databricks.md#5-선택-단일-모델-최소-설정) |
-| 기존 LiteLLM 서버에 Databricks와 Foundry 모델 추가 | [기존 LiteLLM 서버 변경 가이드](docs/existing-litellm-server.md) |
+| 기존 LiteLLM 서버에 Databricks Claude 추가 | [기존 LiteLLM 서버 Databricks 가이드](docs/existing-litellm-server.md) |
+| 기존 LiteLLM 서버에 Microsoft Foundry GPT-5.6 추가 | [기존 LiteLLM 서버 Foundry 가이드](docs/existing-litellm-foundry.md) |
 | PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#8-pat-대신-oauth-u2m) |
 | VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#9-vs-code-extension-사용-시) |
 | OpenAI 호환 Chat Completions 경로 확인 | [Microsoft Agent Framework 샘플](docs/agent-framework.md) |
