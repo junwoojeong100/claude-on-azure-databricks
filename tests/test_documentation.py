@@ -174,6 +174,14 @@ class DocumentationTests(unittest.TestCase):
             with self.subTest(filename=filename):
                 self.assertIn("shell 환경변수보다 우선", guide)
 
+        for filename in (
+            "claude-code-foundry-local.md",
+            "existing-litellm-foundry.md",
+        ):
+            guide = (ROOT / "docs" / filename).read_text(encoding="utf-8")
+            with self.subTest(filename=filename):
+                self.assertIn("**필수 경로:**", guide)
+
     def test_claude_guide_covers_required_configuration(self) -> None:
         guide_path = ROOT / "docs" / "claude-code-databricks.md"
         guide = guide_path.read_text(encoding="utf-8")

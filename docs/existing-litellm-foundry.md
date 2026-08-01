@@ -34,6 +34,9 @@ Claude Code
 `ANTHROPIC_FOUNDRY_BASE_URL`과 `ANTHROPIC_FOUNDRY_API_KEY`는 Foundry의 Claude
 deployment 직접 연결용이므로 GPT-5.6 LiteLLM 흐름에는 설정하지 않습니다.
 
+**필수 경로:** 설정 source와 deployment 확인 → managed identity와 RBAC 준비 →
+기존 `model_list`에 병합 → Responses·Messages route 검증 → Claude Code 연결
+
 > 공식 Microsoft Learn과 LiteLLM 문서 확인: 2026-08-01.
 >
 > 적용 전 기존 `config.yaml`, 환경변수와 database model 설정을 백업하세요.

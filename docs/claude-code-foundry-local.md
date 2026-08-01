@@ -18,6 +18,9 @@ Claude Code
 > 이 로컬 LiteLLM은 Anthropic Messages request와 Responses API를 양방향으로
 > 변환하는 adapter입니다.
 
+**필수 경로:** Azure CLI 로그인과 설치 → 환경변수와 YAML 작성 → local proxy 시작 →
+Sol·Terra·Luna route 검증 → Claude Code 연결 → 설정 저장
+
 ## 1. 준비 사항
 
 다음 항목을 준비합니다.
