@@ -249,6 +249,29 @@ class DocumentationTests(unittest.TestCase):
         ):
             self.assertIn(required_text, script)
 
+    def test_existing_litellm_uses_managed_identity_for_foundry(self) -> None:
+        guide = (ROOT / "docs" / "existing-litellm-server.md").read_text(
+            encoding="utf-8"
+        )
+
+        for required_text in (
+            "## 8. LiteLLM host에 managed identity 연결",
+            "Cognitive Services OpenAI User",
+            "FOUNDRY_GPT_AZURE_SCOPE=https://ai.azure.com/.default",
+            "enable_azure_ad_token_refresh: true",
+            "ManagedIdentityCredential",
+        ):
+            self.assertIn(required_text, guide)
+
+        self.assertNotIn(
+            "api_key: os.environ/FOUNDRY_GPT_API_KEY",
+            guide,
+        )
+        self.assertNotIn(
+            "client_secret: os.environ/AZURE_CLIENT_SECRET",
+            guide,
+        )
+
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}
         checked = 0
