@@ -264,8 +264,26 @@ class DocumentationTests(unittest.TestCase):
             "LiteLLM process 전체에",
             "AZURE_OPENAI_API_KEY",
             "922,000 tokens",
+            "Claude Code용 Microsoft Foundry 구성",
+            "CLAUDE_CODE_USE_FOUNDRY",
+            "ANTHROPIC_FOUNDRY_RESOURCE",
+            "사용자 PC의 `az login`도 Foundry backend 인증에 사용되지 않습니다",
         ):
             self.assertIn(required_text, guide)
+
+        json_settings = [
+            json.loads(code)
+            for language, code, _ in fenced_blocks(
+                ROOT / "docs" / "existing-litellm-foundry.md"
+            )
+            if language == "json"
+        ]
+        gateway_env = json_settings[0]["env"]
+        self.assertIn("ANTHROPIC_BASE_URL", gateway_env)
+        self.assertIn("ANTHROPIC_AUTH_TOKEN", gateway_env)
+        self.assertNotIn("CLAUDE_CODE_USE_FOUNDRY", gateway_env)
+        self.assertNotIn("ANTHROPIC_FOUNDRY_RESOURCE", gateway_env)
+        self.assertNotIn("ANTHROPIC_FOUNDRY_BASE_URL", gateway_env)
 
         self.assertNotIn(
             "api_key: os.environ/FOUNDRY_GPT_API_KEY",

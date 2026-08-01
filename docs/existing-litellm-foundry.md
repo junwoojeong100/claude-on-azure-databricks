@@ -13,6 +13,28 @@ Claude Code
           └─ foundry-gpt-5.6-luna
 ```
 
+## Microsoft Learn의 직접 연결 가이드와 구분
+
+Microsoft Learn의
+[Claude Code용 Microsoft Foundry 구성](https://learn.microsoft.com/azure/foundry/foundry-models/how-to/configure-claude-code)
+문서는 Foundry에 배포한 **Claude 모델을 Claude Code에서 직접 호출**하는 절차입니다.
+이 문서는 **GPT-5.6을 LiteLLM의 Anthropic 호환 endpoint를 통해 호출**하므로 다음 설정을
+그대로 적용하지 않습니다.
+
+| 항목 | Microsoft Learn 직접 연결 | 이 가이드의 LiteLLM 연결 |
+| --- | --- | --- |
+| Backend 모델 | Foundry의 Claude deployment | Foundry의 GPT-5.6 deployment |
+| Claude Code endpoint | Foundry의 `/anthropic` endpoint | LiteLLM의 `/v1/messages` endpoint |
+| Claude Code 설정 | `CLAUDE_CODE_USE_FOUNDRY`, `ANTHROPIC_FOUNDRY_RESOURCE` 또는 `ANTHROPIC_FOUNDRY_BASE_URL` | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` |
+| Client 인증 | Azure CLI의 Microsoft Entra ID 또는 Foundry API key | LiteLLM virtual key |
+| Foundry 인증 주체 | Claude Code를 실행하는 사용자 또는 workload | LiteLLM host의 managed identity |
+
+두 방식을 혼합하지 않습니다. 이 가이드를 사용할 때 Claude Code에는
+`CLAUDE_CODE_USE_FOUNDRY`, `ANTHROPIC_FOUNDRY_RESOURCE`,
+`ANTHROPIC_FOUNDRY_BASE_URL`, `ANTHROPIC_FOUNDRY_API_KEY`를 설정하지 않습니다.
+사용자 PC의 `az login`도 Foundry backend 인증에 사용되지 않습니다. 대신 LiteLLM
+host의 managed identity가 `https://ai.azure.com/.default` scope로 token을 얻습니다.
+
 > 공식 Microsoft Learn과 LiteLLM 문서 확인: 2026-08-01.
 >
 > 적용 전 기존 `config.yaml`, 환경변수와 database model 설정을 백업하세요.
