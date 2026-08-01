@@ -140,18 +140,22 @@ Workspace에서 호출할 수 없는 모델은 등록하지 않습니다. `[1m]`
 maintenance 절차를 사용해 LiteLLM을 다시 시작합니다. 단일 인스턴스를 즉시 재시작하면
 기존 사용자 요청이 중단될 수 있습니다.
 
-재시작 후 health endpoint를 확인합니다.
-
-```bash
-curl -fsS "https://<litellm-host>/health"
-```
-
-그다음 LiteLLM virtual key로 Anthropic Messages endpoint를 직접 호출합니다.
+재시작 후 LiteLLM key를 준비하고, 실제 모델 호출을 수행하는 authenticated health
+endpoint를 확인합니다. `/health`는 모델마다 소량의 token을 사용할 수 있습니다.
 
 ```bash
 export LITELLM_BASE_URL="https://<litellm-host>"
 export LITELLM_KEY="<litellm-virtual-key>"
 
+curl -fsS "$LITELLM_BASE_URL/health" \
+  -H "Authorization: Bearer $LITELLM_KEY"
+```
+
+Process와 database readiness만 확인하는 load balancer probe에는 인증이 필요 없는
+`/health/liveliness`와 `/health/readiness`를 사용합니다. 그다음 LiteLLM virtual key로
+Anthropic Messages endpoint를 직접 호출합니다.
+
+```bash
 curl -sS "$LITELLM_BASE_URL/v1/messages" \
   -H "Authorization: Bearer $LITELLM_KEY" \
   -H "anthropic-version: 2023-06-01" \
@@ -228,8 +232,7 @@ VS Code extension도 사용한다면 VS Code 사용자 settings의
 
 > 공식 Microsoft Learn과 LiteLLM 문서 확인: 2026-08-01.
 
-Microsoft Foundry에서 다음 Azure OpenAI model deployment가 이미 생성되어 있어야
-합니다.
+Microsoft Foundry에서 다음 model deployment가 이미 생성되어 있어야 합니다.
 
 | 모델 ID | 현재 모델 버전 | 권장 LiteLLM alias |
 | --- | --- | --- |
@@ -237,15 +240,17 @@ Microsoft Foundry에서 다음 Azure OpenAI model deployment가 이미 생성되
 | `gpt-5.6-terra` | `2026-07-09` | `foundry-gpt-5.6-terra` |
 | `gpt-5.6-luna` | `2026-07-09` | `foundry-gpt-5.6-luna` |
 
-세 모델은 Responses API와 Chat Completions API, reasoning, structured output, image input,
-function calling을 지원합니다. 모델 context window는 1,050,000 tokens이지만 Claude
-Code의 Anthropic 전용 `[1m]` suffix는 붙이지 않습니다.
+세 모델은 Responses API와 Chat Completions API, reasoning, structured output, image
+input, function calling을 지원합니다. 각 모델의 context window는 1,050,000 tokens,
+입력 한도는 922,000 tokens, 최대 output은 128,000 tokens입니다. 입력, 출력과 reasoning
+token은 같은 context budget을 사용하므로 이 한도들을 서로 더한 용량을 한 요청에서
+보장하지 않습니다. Claude Code의 Anthropic 전용 `[1m]` suffix는 붙이지 않습니다.
 
 Foundry portal에서 다음 값을 확인합니다.
 
-- Azure OpenAI resource endpoint
+- Microsoft Foundry resource endpoint
 - 각 모델의 실제 deployment name
-- Azure OpenAI v1 API 사용 가능 여부
+- Microsoft Foundry v1 API 사용 가능 여부
 - LiteLLM host에 연결할 managed identity
 - 해당 리전의 모델 가용성과 GPT-5.6 quota
 
@@ -271,14 +276,20 @@ LiteLLM host의 Azure portal **Identity** 화면에서 다음 중 하나를 활�
 - **User assigned**: 여러 host가 공유할 수 있는 identity를 연결합니다. 아래
   `AZURE_CLIENT_ID`에 이 identity의 client ID를 지정합니다.
 
-### 8.2 Azure OpenAI inference 권한 할당
+Microsoft Foundry resource의 public network access가 비활성화되어 있거나 IP/VNet
+제한이 있다면 LiteLLM host가 허용된 network에 있어야 합니다. Private endpoint를
+사용하는 경우 host에서 resource hostname이 private IP로 해석되는지와 outbound
+TCP 443 연결을 함께 확인합니다. `PublicNetworkAccessDisabled` 또는 network ACL 관련
+`403`은 RBAC 역할을 추가해도 해결되지 않습니다.
 
-Azure portal에서 GPT-5.6 deployment가 있는 Foundry/Azure OpenAI resource를 열고
+### 8.2 Microsoft Foundry inference 권한 할당
+
+Azure portal에서 GPT-5.6 deployment가 있는 Microsoft Foundry resource를 열고
 **Access control (IAM)** > **Add role assignment**에서 LiteLLM host의 managed identity에
-**Cognitive Services OpenAI User** 역할을 할당합니다. Azure OpenAI v1 inference를
+**Cognitive Services OpenAI User** 역할을 할당합니다. Microsoft Foundry v1 inference를
 Microsoft Entra ID로 호출할 때 필요한 최소 역할입니다.
 
-역할은 deployment가 아니라 Azure OpenAI resource 범위에 할당합니다. 역할 전파에는
+역할은 deployment가 아니라 Microsoft Foundry resource 범위에 할당합니다. 역할 전파에는
 몇 분이 걸릴 수 있으므로 할당 직후 `401` 또는 `403`이 발생하면 잠시 기다린 뒤 다시
 검증합니다.
 
@@ -286,9 +297,9 @@ Microsoft Entra ID로 호출할 때 필요한 최소 역할입니다.
 
 | 변수 또는 placeholder | 값 | 확인 위치 |
 | --- | --- | --- |
-| `FOUNDRY_GPT_API_BASE` | Azure OpenAI resource endpoint host | Foundry portal 또는 Azure portal의 해당 resource **Keys and Endpoint** |
-| `FOUNDRY_GPT_API_VERSION` | `v1` | Portal secret이 아니라 LiteLLM에서 Azure OpenAI v1 route를 선택하는 고정값 |
-| `FOUNDRY_GPT_AZURE_SCOPE` | `https://ai.azure.com/.default` | Microsoft Azure OpenAI v1 API의 고정 Entra scope |
+| `FOUNDRY_GPT_API_BASE` | Microsoft Foundry resource endpoint host | Foundry portal 또는 Azure portal의 해당 resource **Keys and Endpoint** |
+| `FOUNDRY_GPT_API_VERSION` | `v1` | Portal secret이 아니라 LiteLLM에서 Microsoft Foundry v1 route를 선택하는 고정값 |
+| `FOUNDRY_GPT_AZURE_SCOPE` | `https://ai.azure.com/.default` | Microsoft Foundry v1 API의 고정 Entra scope |
 | `<sol-deployment-name>` 등 | 각 deployment의 **Deployment name** | Foundry portal의 **Models + endpoints** > **Deployments**. Model ID가 아니라 deployment name 사용 |
 | `AZURE_CLIENT_ID` | User-assigned managed identity의 client ID | Azure portal의 해당 managed identity **Overview**. System-assigned 방식에서는 설정하지 않음 |
 
@@ -314,6 +325,64 @@ host가 표시될 수 있으므로 portal 값을 사용합니다.
 
 `FOUNDRY_GPT_API_KEY`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`은 설정하지 않습니다.
 System-assigned identity에서는 `AZURE_CLIENT_ID`도 설정하지 않습니다.
+
+LiteLLM은 모델에 `api_key`가 없더라도 process의 `AZURE_OPENAI_API_KEY` 또는
+`AZURE_API_KEY`가 설정되어 있으면 API key를 managed identity보다 먼저 사용합니다.
+또한 `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`이 모두 있으면
+service principal credential을 선택하며, `AZURE_CREDENTIAL`은 자동 선택을 override할
+수 있습니다. 같은 runtime에서 아래 이름이 설정되어 있는지 값은 출력하지 않고
+확인합니다.
+
+```bash
+env | cut -d= -f1 | grep -E \
+  '^(AZURE_OPENAI_API_KEY|AZURE_API_KEY|AZURE_CLIENT_SECRET|AZURE_TENANT_ID|AZURE_CREDENTIAL|AZURE_AD_TOKEN)$' \
+  || true
+```
+
+이 가이드를 managed identity 전용으로 적용하려면 위 전역 credential을 LiteLLM
+process에서 제거합니다. 기존 Azure 모델이 전역 `AZURE_API_KEY` 자동 인식에 의존한다면
+그 모델 항목에 별도 이름의 환경변수를 명시적으로 연결한 뒤 전역 변수를 제거합니다.
+
+```yaml
+  - model_name: existing-azure-model
+    litellm_params:
+      model: azure/<existing-deployment-name>
+      api_base: os.environ/EXISTING_AZURE_API_BASE
+      api_key: os.environ/EXISTING_AZURE_API_KEY
+      api_version: os.environ/EXISTING_AZURE_API_VERSION
+```
+
+이 분리가 불가능하면 API key 기반 모델과 managed identity 기반 Foundry 모델을 서로
+다른 LiteLLM instance에서 운영합니다.
+
+### 8.4 재시작 전 managed identity 확인
+
+LiteLLM Proxy의 표준 `proxy` 설치에는 `azure-identity`가 포함됩니다. 자체 slim image나
+최소 dependency 설치를 사용한다면 아래 명령을 LiteLLM과 같은 container 또는 process
+환경에서 실행해 package와 managed identity token 획득을 함께 확인합니다. Token 값은
+출력하지 않습니다.
+
+```bash
+python - <<'PY'
+import os
+from datetime import datetime, timezone
+
+from azure.identity import ManagedIdentityCredential
+
+client_id = os.getenv("AZURE_CLIENT_ID")
+credential = ManagedIdentityCredential(client_id=client_id)
+token = credential.get_token(
+    os.getenv("FOUNDRY_GPT_AZURE_SCOPE", "https://ai.azure.com/.default")
+)
+expires_at = datetime.fromtimestamp(token.expires_on, tz=timezone.utc)
+print(f"managed identity token acquired; expires_at={expires_at.isoformat()}")
+PY
+```
+
+이 단계가 실패하면 LiteLLM을 재시작하기 전에 host identity 연결, `AZURE_CLIENT_ID`,
+managed identity endpoint 접근, `azure-identity` 설치 상태를 먼저 수정합니다. Token
+획득 성공은 identity endpoint 검증이며 Foundry RBAC까지 검증하지는 않으므로, 역할
+할당은 8.2절과 10절의 API smoke test에서 별도로 확인합니다.
 
 ## 9. 기존 `model_list`에 Foundry 모델 추가
 
@@ -361,8 +430,8 @@ litellm_settings:
 
 `azure/responses/<deployment-name>`은 LiteLLM의 `/v1/responses`와 Claude Code가
 사용하는 `/v1/messages` 변환을 모두 Azure Responses API로 보냅니다. Chat Completions
-전용 alias가 별도로 필요하다면 `azure/gpt5_series/<deployment-name>`을 추가할 수
-있지만, 그 형식을 위 Claude Code alias 대신 사용하지 않습니다.
+경로용 alias가 별도로 필요하다면 `azure/gpt5_series/<deployment-name>`을 추가할 수
+있지만, 그 형식을 위 Responses 기반 Claude Code alias 대신 사용하지 않습니다.
 
 System-assigned 방식에서 LiteLLM은 `DefaultAzureCredential` 경로로 host identity를
 사용합니다. User-assigned 방식은 `AZURE_CLIENT_ID`만 설정되어 있으면 LiteLLM이
@@ -370,10 +439,19 @@ System-assigned 방식에서 LiteLLM은 `DefaultAzureCredential` 경로로 host 
 운영 host에는 다른 identity가 선택되지 않도록 Azure CLI login, service principal
 환경변수, 정적 Azure token을 두지 않습니다.
 
+`AZURE_CLIENT_ID`와 `enable_azure_ad_token_refresh`는 특정 Foundry 모델만의 설정이
+아니라 LiteLLM process 전체에 적용됩니다. 기존에 API key 없이 `azure/...` provider를
+사용하는 모델이 있다면 같은 managed identity를 사용해도 되는지와 각 모델의
+`azure_scope`가 올바른지 먼저 확인합니다. 서로 다른 user-assigned identity가 필요하면
+한 process에 이 설정을 혼합하지 말고 LiteLLM instance를 분리합니다. 모델 항목에
+명시적인 `api_key`가 있는 기존 모델은 해당 설정을 유지할 수 있지만, 전역
+`AZURE_OPENAI_API_KEY` 또는 `AZURE_API_KEY` 자동 인식에는 의존하지 않습니다.
+
 `base_model`은 custom deployment name과 실제 GPT-5.6 tier를 연결해 cost와 context
 metadata를 정확히 선택합니다. 위 예시는 Global Standard 가격 key입니다. US 또는 EU
-지역 가격을 적용해야 한다면 LiteLLM cost map의 `azure/us/gpt-5.6-*` 또는
-`azure/eu/gpt-5.6-*` key를 사용합니다. 별도 계약 가격은 `model_info`의 token별 pricing
+Data Zone deployment라면 LiteLLM cost map의 `azure/us/gpt-5.6-*` 또는
+`azure/eu/gpt-5.6-*` key를 사용합니다. Resource의 위치만 보고 선택하지 말고 실제
+deployment type을 기준으로 결정합니다. 별도 계약 가격은 `model_info`의 token별 pricing
 필드로 override합니다.
 
 LiteLLM이 로컬 cost map만 사용한다면 GPT-5.6 metadata가 포함된 버전을 사용하거나 최신
@@ -433,7 +511,7 @@ curl -sS "$LITELLM_BASE_URL/v1/messages" \
 `/v1/responses`는 성공하고 `/v1/messages`만 실패하면 Foundry deployment보다 LiteLLM의
 Anthropic-to-Responses 변환 호환성을 먼저 확인합니다. LiteLLM 버전을 변경하기 전에는
 현재 stable 버전의 non-Anthropic 모델 가이드와 release note를 검토하세요. LiteLLM의
-Claude Code compatibility matrix는 Azure Foundry의 Claude tier를 자동 검증하지만
+Claude Code compatibility matrix는 Microsoft Foundry의 Claude tier를 자동 검증하지만
 GPT-5.6 Sol, Terra, Luna를 직접 인증하는 표는 아니므로 실제 기능별 smoke test를
 대체하지 않습니다.
 
@@ -488,6 +566,11 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 | `[1m]` 모델을 찾지 못함 | LiteLLM alias에서 `[1m]` 제거, Claude Code 최신 버전 |
 | Foundry `404 DeploymentNotFound` | model ID가 아니라 실제 deployment name을 사용했는지 |
 | Foundry `401` 또는 `403` | host의 managed identity 활성화, `Cognitive Services OpenAI User` 역할, scope와 resource endpoint |
+| `PublicNetworkAccessDisabled` 또는 network ACL `403` | Foundry public access 설정, private endpoint, VNet/IP allowlist, private DNS |
+| managed identity 대신 API key가 사용됨 | process 전역 `AZURE_OPENAI_API_KEY`, `AZURE_API_KEY` 또는 model-level `api_key` |
+| managed identity 대신 service principal이 사용됨 | process 전역 `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_CREDENTIAL` |
+| managed identity token 획득 실패 | `azure-identity` 설치, host identity 연결, user-assigned identity의 `AZURE_CLIENT_ID`, identity endpoint 접근 |
+| 기존 keyless Azure 모델 인증이 바뀜 | process 전역 `AZURE_CLIENT_ID`와 `enable_azure_ad_token_refresh`, 동일 identity 사용 가능 여부 |
 | GPT-5.6 deployment 생성 실패 | 리전 가용성, subscription quota tier와 quota request |
 | `/model`에 Foundry alias가 없음 | gateway discovery, Claude Code 버전, virtual key 모델 권한 |
 | 비용이 unknown으로 표시됨 | `model_info.base_model`, cost map 갱신, pricing override |
@@ -498,7 +581,7 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 - [LiteLLM Claude Code quickstart](https://docs.litellm.ai/docs/tutorials/claude_responses_api)
 - [LiteLLM proxy configuration](https://docs.litellm.ai/docs/proxy/configs)
 - [LiteLLM GPT-5.6](https://docs.litellm.ai/blog/gpt_5_6)
-- [LiteLLM Azure OpenAI provider](https://docs.litellm.ai/docs/providers/azure)
+- [LiteLLM Microsoft Foundry 연결용 Azure provider](https://docs.litellm.ai/docs/providers/azure)
 - [LiteLLM Azure Responses API](https://docs.litellm.ai/docs/providers/azure/azure_responses)
 - [LiteLLM custom pricing과 base model](https://docs.litellm.ai/docs/proxy/custom_pricing)
 - [LiteLLM에서 non-Anthropic 모델 사용](https://docs.litellm.ai/docs/tutorials/claude_non_anthropic_models)
@@ -507,7 +590,8 @@ non-Anthropic backend입니다. Claude 전용 beta 기능이 모두 동일하게
 - [Azure Databricks OAuth M2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m)
 - [Microsoft Foundry GPT-5.6 모델](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#gpt-56)
 - [Microsoft Foundry model endpoint와 deployment](https://learn.microsoft.com/azure/foundry/foundry-models/concepts/endpoints)
-- [Azure OpenAI Responses API](https://learn.microsoft.com/azure/foundry/openai/how-to/responses)
-- [Azure OpenAI v1 API](https://learn.microsoft.com/azure/foundry/openai/api-version-lifecycle)
-- [Azure OpenAI RBAC 역할](https://learn.microsoft.com/azure/foundry-classic/openai/how-to/role-based-access-control)
+- [Microsoft Foundry Responses API](https://learn.microsoft.com/azure/foundry/openai/how-to/responses)
+- [Microsoft Foundry v1 API](https://learn.microsoft.com/azure/foundry/openai/api-version-lifecycle)
+- [Microsoft Foundry inference RBAC 역할](https://learn.microsoft.com/azure/foundry-classic/openai/how-to/role-based-access-control)
+- [Microsoft Foundry private link](https://learn.microsoft.com/azure/foundry/how-to/configure-private-link)
 - [Azure managed identity 개요](https://learn.microsoft.com/entra/identity/managed-identities-azure-resources/overview)

@@ -260,6 +260,11 @@ class DocumentationTests(unittest.TestCase):
             "FOUNDRY_GPT_AZURE_SCOPE=https://ai.azure.com/.default",
             "enable_azure_ad_token_refresh: true",
             "ManagedIdentityCredential",
+            "managed identity token acquired",
+            "LiteLLM process 전체에 적용됩니다",
+            "AZURE_OPENAI_API_KEY",
+            "입력 한도는 922,000 tokens",
+            "/health/readiness",
         ):
             self.assertIn(required_text, guide)
 
@@ -271,6 +276,8 @@ class DocumentationTests(unittest.TestCase):
             "client_secret: os.environ/AZURE_CLIENT_SECRET",
             guide,
         )
+        self.assertNotIn("Azure OpenAI", guide)
+        self.assertNotIn("Azure Foundry", guide)
 
     def test_local_links_and_anchors_resolve(self) -> None:
         anchor_cache = {path: markdown_anchors(path) for path in MARKDOWN_FILES}
