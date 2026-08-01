@@ -144,8 +144,8 @@ Claude Code 설정을 변경하지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 추
 
 | 단계 | 목적 | 가이드 |
 | --- | --- | --- |
-| 1 | 로컬 LiteLLM을 통해 Claude Code 연결 | [Foundry GPT-5.6 로컬 연결](docs/claude-code-foundry-local.md) |
-| 2 | 기존 LiteLLM 서버를 통해 Claude Code 연결 | [Foundry GPT-5.6 LiteLLM 연결](docs/existing-litellm-foundry.md) |
+| 1 | 로컬 LiteLLM을 통해 Claude Code를 Foundry GPT-5.6에 연결 | [로컬 LiteLLM에서 Foundry 연결](docs/claude-code-foundry-local.md) |
+| 2 | 기존 LiteLLM 서버를 통해 Claude Code를 Foundry GPT-5.6에 연결 | [기존 LiteLLM에서 Foundry 연결](docs/existing-litellm-foundry.md) |
 
 > Claude Code는 Foundry GPT-5.6의 OpenAI Responses API를 직접 호출하지 않습니다.
 > 흐름 B는 1단계의 로컬 LiteLLM과 2단계의 기존 LiteLLM 서버 모두 Anthropic Messages

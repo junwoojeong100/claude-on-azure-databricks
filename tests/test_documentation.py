@@ -121,6 +121,14 @@ class DocumentationTests(unittest.TestCase):
             "흐름 B는 1단계의 로컬 LiteLLM과 2단계의 기존 LiteLLM 서버 모두",
             flows,
         )
+        self.assertIn(
+            "로컬 LiteLLM을 통해 Claude Code를 Foundry GPT-5.6에 연결",
+            flows,
+        )
+        self.assertIn(
+            "기존 LiteLLM 서버를 통해 Claude Code를 Foundry GPT-5.6에 연결",
+            flows,
+        )
 
     def test_claude_guide_covers_required_configuration(self) -> None:
         guide_path = ROOT / "docs" / "claude-code-databricks.md"
