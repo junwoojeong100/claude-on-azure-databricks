@@ -1,8 +1,15 @@
-# 기존 LiteLLM 서버에 Microsoft Foundry GPT-5.6 연결하기
+# 기존 LiteLLM을 통해 Claude Code를 Microsoft Foundry GPT-5.6에 연결하기
 
 이 가이드는 이미 운영 중인 LiteLLM Proxy에 Microsoft Foundry의 GPT-5.6 Sol, Terra,
 Luna를 추가하는 절차입니다. 기존 Databricks와 다른 provider 모델은 그대로 유지하며,
 Foundry 인증에는 API key나 service principal 대신 managed identity만 사용합니다.
+이 문서는 Foundry 흐름의 2단계입니다. 먼저
+[로컬 LiteLLM으로 Claude Code 연결](claude-code-foundry-local.md)을 완료해 resource
+endpoint, 실제 deployment name과 Claude Code 호환성을 확인하세요.
+
+> 이 리포는 LiteLLM이나 Foundry resource를 설치하지 않습니다.
+> `scripts/configure_claude_code.py`는 **Databricks 직접 연결용**이므로 이 흐름에서는
+> 실행하지 않습니다.
 
 ```text
 Claude Code
@@ -12,6 +19,23 @@ Claude Code
           ├─ foundry-gpt-5.6-terra
           └─ foundry-gpt-5.6-luna
 ```
+
+로컬 LiteLLM과 기존 LiteLLM 서버 연결의 차이는 다음과 같습니다.
+
+| 항목 | 로컬 LiteLLM | 기존 LiteLLM 서버 |
+| --- | --- | --- |
+| Claude Code endpoint | `http://127.0.0.1:4000` | 조직의 LiteLLM URL |
+| Foundry 인증 주체 | `az login`한 로컬 사용자 | LiteLLM host의 managed identity |
+| LiteLLM credential | 로컬 master key | 사용자별 virtual key |
+| 운영 범위 | 한 사용자 개발·검증 | 중앙 운영과 여러 사용자 |
+
+로컬 key나 Azure CLI token을 기존 서버에 복사하지 않습니다. 또한 Microsoft Learn의
+`CLAUDE_CODE_USE_FOUNDRY`, `ANTHROPIC_FOUNDRY_RESOURCE`,
+`ANTHROPIC_FOUNDRY_BASE_URL`과 `ANTHROPIC_FOUNDRY_API_KEY`는 Foundry의 Claude
+deployment 직접 연결용이므로 GPT-5.6 LiteLLM 흐름에는 설정하지 않습니다.
+
+**필수 경로:** 설정 source와 deployment 확인 → managed identity와 RBAC 준비 →
+기존 `model_list`에 병합 → Responses·Messages route 검증 → Claude Code 연결
 
 > 공식 Microsoft Learn과 LiteLLM 문서 확인: 2026-08-01.
 >
@@ -215,14 +239,6 @@ token을 자동 갱신합니다.
 적용됩니다. 기존 keyless `azure/...` 모델이 같은 identity를 사용해도 되는지와 각
 모델의 `azure_scope`를 확인합니다. 서로 다른 identity가 필요하면 instance를 분리합니다.
 
-위 `base_model`은 Global Standard 가격 key입니다. US 또는 EU Data Zone deployment는
-각각 `azure/us/gpt-5.6-*`, `azure/eu/gpt-5.6-*` key를 사용합니다. Resource 위치가
-아니라 실제 deployment type을 기준으로 선택합니다.
-
-LiteLLM이 local cost map만 사용한다면 GPT-5.6 metadata가 포함된 버전을 사용하거나
-Admin UI의 **Reload Model Cost Map** 또는 기존 운영 절차의
-`POST /reload/model_cost_map`으로 최신 map을 불러옵니다.
-
 ## 4. Foundry route를 순서대로 검증
 
 기존 운영 절차로 LiteLLM을 rolling restart한 뒤 URL과 virtual key를 설정합니다.
@@ -283,10 +299,13 @@ Anthropic-to-Responses 변환 호환성을 먼저 확인합니다. LiteLLM 버�
 
 ## 5. Claude Code에서 Foundry 모델 노출
 
-기존 LiteLLM URL과 virtual key를 사용하고 gateway model discovery를 활성화합니다.
+`~/.claude/settings.json`의 unrelated 설정은 유지하고 다음 값을 병합합니다. 프로젝트
+범위가 필요하면 credential이 commit되지 않는 `.claude/settings.local.json`을
+사용합니다. `ANTHROPIC_BASE_URL`에는 `/v1/messages`를 붙이지 않습니다.
 
 ```json
 {
+  "model": "foundry-gpt-5.6-sol",
   "env": {
     "ANTHROPIC_BASE_URL": "https://<litellm-host>",
     "ANTHROPIC_AUTH_TOKEN": "<litellm-virtual-key>",
@@ -295,6 +314,16 @@ Anthropic-to-Responses 변환 호환성을 먼저 확인합니다. LiteLLM 버�
   }
 }
 ```
+
+이 리포의 `scripts/configure_claude_code.py`는 Databricks workspace URL, credential과
+`databricks-claude-*` 기본 모델을 다시 저장하므로 위 설정 후 실행하지 않습니다.
+기존에 이 스크립트로 설정했다면 다음 기준으로 정리합니다.
+
+- 같은 LiteLLM에 [Databricks alias](existing-litellm-databricks.md)도 등록되어 있고 virtual
+  key가 접근할 수 있으면 기존 `ANTHROPIC_DEFAULT_*` picker 값은 유지할 수 있습니다.
+- Foundry 모델만 제공하는 LiteLLM이면 기존 `databricks-claude-*`를 가리키는 최상위
+  `model`, `ANTHROPIC_DEFAULT_*`, `ANTHROPIC_CUSTOM_MODEL_OPTION*` 값을 제거하고 위처럼
+  `model`을 `foundry-gpt-5.6-sol`로 지정합니다.
 
 Claude Code 2.1.129 이상은 LiteLLM의 `GET /v1/models`를 호출하고 virtual key가 접근할
 수 있는 모델을 `/model` picker의 **From gateway**에 표시합니다. Alias가 보이지 않으면
@@ -311,9 +340,28 @@ for model in \
 done
 ```
 
+VS Code extension을 사용하면 VS Code 사용자 settings의
+`claudeCode.environmentVariables`에도 같은 LiteLLM URL, virtual key, gateway discovery
+값을 설정합니다. `~/.claude/settings.json`만으로는 extension의 로그인 확인에 값이
+제때 전달되지 않을 수 있습니다.
+
 Foundry GPT 모델은 LiteLLM이 Anthropic request와 response를 변환하는 non-Anthropic
 backend입니다. Tool use, reasoning, image input처럼 실제 사용할 기능을 각각 검증한 뒤
 사용자에게 공개합니다.
+
+> **완료 기준:** `/status`의 Anthropic base URL이 조직의 LiteLLM URL이고,
+> `/model`의 **From gateway**에 세 alias가 표시되며 세 Claude Code 테스트가 모두
+> 성공합니다.
+
+## 선택: 비용 추적
+
+위 `base_model`은 Global Standard 가격 key입니다. US 또는 EU Data Zone deployment는
+각각 `azure/us/gpt-5.6-*`, `azure/eu/gpt-5.6-*` key를 사용합니다. Resource 위치가
+아니라 실제 deployment type을 기준으로 선택합니다.
+
+LiteLLM이 local cost map만 사용한다면 GPT-5.6 metadata가 포함된 버전을 사용하거나
+Admin UI의 **Reload Model Cost Map** 또는 기존 운영 절차의
+`POST /reload/model_cost_map`으로 최신 map을 불러옵니다.
 
 ## 문제 해결
 
@@ -330,6 +378,7 @@ backend입니다. Tool use, reasoning, image input처럼 실제 사용할 기능
 | 기존 keyless Azure 모델 인증이 바뀜 | 전역 `AZURE_CLIENT_ID`, token refresh, identity와 scope |
 | GPT-5.6 deployment 생성 실패 | 리전 가용성, subscription quota tier와 quota request |
 | `/model`에 alias가 없음 | Gateway discovery, Claude Code 버전, virtual key 모델 권한 |
+| 시작 시 Databricks model not found | repo script가 저장한 `model` 또는 `ANTHROPIC_DEFAULT_*` 값 |
 | 비용이 unknown으로 표시됨 | `model_info.base_model`, cost map, pricing override |
 
 ## 공식 문서

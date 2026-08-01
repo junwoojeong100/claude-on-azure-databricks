@@ -67,13 +67,18 @@ def fenced_blocks(path: Path) -> list[tuple[str, str, int]]:
 
 
 class DocumentationTests(unittest.TestCase):
-    def test_readme_leads_with_existing_workspace_quickstart(self) -> None:
+    def test_readme_leads_with_connection_flows(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
-        quickstart_heading = "## 1. 5분 연결: 기존 workspace에 Claude Code 연결"
-        workspace_heading = "## 2. Workspace가 없다면"
+        flows_heading = "## 1. 연결 흐름 선택"
+        quickstart_heading = "## 2. 5분 연결: 기존 Databricks workspace"
+        workspace_heading = "## 3. Databricks workspace가 없다면"
 
+        self.assertIn(flows_heading, readme)
         self.assertIn(quickstart_heading, readme)
         self.assertIn(workspace_heading, readme)
+        self.assertLess(
+            readme.index(flows_heading), readme.index(quickstart_heading)
+        )
         self.assertLess(
             readme.index(quickstart_heading), readme.index(workspace_heading)
         )
@@ -102,6 +107,80 @@ class DocumentationTests(unittest.TestCase):
                 linked_guides.add(linked_path)
 
         self.assertEqual(linked_guides, set(docs_dir.glob("*.md")))
+
+    def test_readme_exposes_two_claude_code_connection_flows(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        flows = readme[readme.index("## 1. 연결 흐름 선택") :]
+
+        expected_order = (
+            "### 흐름 A: Azure Databricks Claude",
+            "docs/claude-code-databricks.md",
+            "docs/existing-litellm-databricks.md",
+            "### 흐름 B: Microsoft Foundry GPT-5.6",
+            "docs/claude-code-foundry-local.md",
+            "docs/existing-litellm-foundry.md",
+        )
+        positions = [flows.index(value) for value in expected_order]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn(
+            "로컬과 기존 서버 흐름 모두 LiteLLM의 Anthropic Messages 변환을 사용합니다",
+            flows,
+        )
+        self.assertIn(
+            "로컬 LiteLLM을 통해 Claude Code를 Foundry GPT-5.6에 연결",
+            flows,
+        )
+        self.assertIn(
+            "기존 LiteLLM 서버를 통해 Claude Code를 Foundry GPT-5.6에 연결",
+            flows,
+        )
+        self.assertIn(
+            "`env` 값은 shell 환경변수보다 우선",
+            flows,
+        )
+
+    def test_core_guides_have_explicit_scope_and_completion(self) -> None:
+        guides = {
+            "claude-code-databricks.md": (
+                "# Claude Code를 Azure Databricks Claude에 직접 연결하기",
+                "Databricks 흐름의 1단계",
+            ),
+            "existing-litellm-databricks.md": (
+                "# 기존 LiteLLM을 통해 Claude Code를 Azure Databricks에 연결하기",
+                "Databricks 흐름의 2단계",
+            ),
+            "claude-code-foundry-local.md": (
+                "# 로컬 LiteLLM을 통해 Claude Code를 Microsoft Foundry GPT-5.6에 연결하기",
+                "Foundry 흐름의 1단계",
+            ),
+            "existing-litellm-foundry.md": (
+                "# 기존 LiteLLM을 통해 Claude Code를 Microsoft Foundry GPT-5.6에 연결하기",
+                "Foundry 흐름의 2단계",
+            ),
+        }
+
+        for filename, (title, step) in guides.items():
+            guide = (ROOT / "docs" / filename).read_text(encoding="utf-8")
+            with self.subTest(filename=filename):
+                self.assertTrue(guide.startswith(title))
+                self.assertIn(step, guide)
+                self.assertIn("**완료 기준:**", guide)
+
+        for filename in (
+            "claude-code-databricks.md",
+            "claude-code-foundry-local.md",
+        ):
+            guide = (ROOT / "docs" / filename).read_text(encoding="utf-8")
+            with self.subTest(filename=filename):
+                self.assertIn("shell 환경변수보다 우선", guide)
+
+        for filename in (
+            "claude-code-foundry-local.md",
+            "existing-litellm-foundry.md",
+        ):
+            guide = (ROOT / "docs" / filename).read_text(encoding="utf-8")
+            with self.subTest(filename=filename):
+                self.assertIn("**필수 경로:**", guide)
 
     def test_claude_guide_covers_required_configuration(self) -> None:
         guide_path = ROOT / "docs" / "claude-code-databricks.md"
@@ -206,9 +285,16 @@ class DocumentationTests(unittest.TestCase):
         api_heading = "## 2. Databricks API부터 검증"
         cli_heading = "## 3. Claude Code에서 임시 검증"
         settings_heading = "## 4. 다중 모델 영구 설정"
+        oauth_heading = "## 7. PAT 대신 OAuth U2M"
+        vscode_heading = "## 8. VS Code extension 사용 시"
+        troubleshooting_heading = "## 문제 해결"
 
         self.assertLess(guide.index(api_heading), guide.index(cli_heading))
         self.assertLess(guide.index(cli_heading), guide.index(settings_heading))
+        self.assertLess(guide.index(oauth_heading), guide.index(vscode_heading))
+        self.assertLess(
+            guide.index(vscode_heading), guide.index(troubleshooting_heading)
+        )
         self.assertLess(
             guide.index("scripts/configure_claude_code.py"),
             guide.index('"ANTHROPIC_DEFAULT_OPUS_MODEL"'),
@@ -253,6 +339,9 @@ class DocumentationTests(unittest.TestCase):
         guide = (ROOT / "docs" / "existing-litellm-foundry.md").read_text(
             encoding="utf-8"
         )
+        local_guide = (ROOT / "docs" / "claude-code-foundry-local.md").read_text(
+            encoding="utf-8"
+        )
 
         for required_text in (
             "## 2. LiteLLM host에 managed identity 연결",
@@ -264,8 +353,43 @@ class DocumentationTests(unittest.TestCase):
             "LiteLLM process 전체에",
             "AZURE_OPENAI_API_KEY",
             "922,000 tokens",
+            "CLAUDE_CODE_USE_FOUNDRY",
+            "ANTHROPIC_FOUNDRY_RESOURCE",
+            "이 리포는 LiteLLM이나 Foundry resource를 설치하지 않습니다",
+            "`scripts/configure_claude_code.py`는 Databricks workspace URL",
+            '"model": "foundry-gpt-5.6-sol"',
+            "claudeCode.environmentVariables",
+            "claude-code-foundry-local.md",
         ):
             self.assertIn(required_text, guide)
+
+        for required_text in (
+            "Claude Code는 Foundry GPT-5.6의 OpenAI Responses API를 직접 호출하지 않습니다",
+            "Cognitive Services OpenAI User",
+            'AZURE_CREDENTIAL="AzureCliCredential"',
+            "enable_azure_ad_token_refresh: true",
+            "azure/responses/<sol-deployment-name>",
+            "ANTHROPIC_BASE_URL",
+            "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
+            "claude --model",
+            "existing-litellm-foundry.md",
+        ):
+            self.assertIn(required_text, local_guide)
+
+        json_settings = [
+            json.loads(code)
+            for language, code, _ in fenced_blocks(
+                ROOT / "docs" / "existing-litellm-foundry.md"
+            )
+            if language == "json"
+        ]
+        gateway_env = json_settings[0]["env"]
+        self.assertEqual(json_settings[0]["model"], "foundry-gpt-5.6-sol")
+        self.assertIn("ANTHROPIC_BASE_URL", gateway_env)
+        self.assertIn("ANTHROPIC_AUTH_TOKEN", gateway_env)
+        self.assertNotIn("CLAUDE_CODE_USE_FOUNDRY", gateway_env)
+        self.assertNotIn("ANTHROPIC_FOUNDRY_RESOURCE", gateway_env)
+        self.assertNotIn("ANTHROPIC_FOUNDRY_BASE_URL", gateway_env)
 
         self.assertNotIn(
             "api_key: os.environ/FOUNDRY_GPT_API_KEY",
@@ -279,7 +403,7 @@ class DocumentationTests(unittest.TestCase):
         self.assertNotIn("Azure Foundry", guide)
 
         databricks_guide = (
-            ROOT / "docs" / "existing-litellm-server.md"
+            ROOT / "docs" / "existing-litellm-databricks.md"
         ).read_text(encoding="utf-8")
         self.assertNotIn("Microsoft Foundry", databricks_guide)
         self.assertNotIn("foundry-gpt-5.6", databricks_guide)

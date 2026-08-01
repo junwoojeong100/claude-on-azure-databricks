@@ -1,16 +1,41 @@
-# Claude on Azure Databricks
+# Claude Code를 Azure Databricks와 Microsoft Foundry에 연결하기
 
-Azure Databricks의 네이티브 Anthropic Messages API를 Claude Code의 모델
-backend로 사용하는 방법을 안내합니다.
+Claude Code를 Azure Databricks Claude 또는 Microsoft Foundry GPT-5.6에 연결하는
+실습 가이드입니다.
 
-가장 일반적인 고객 경로는 **기존 workspace에서 Claude 모델 하나로 API를 먼저 검증한
-뒤, Claude Code에는 여러 Databricks 모델을 한 번에 등록하는 것**입니다. Workspace 생성과
-Microsoft Agent Framework(MAF)는 첫 연결에 필요하지 않습니다.
+먼저 아래 표에서 backend와 실행 위치를 선택하세요. Databricks는 네이티브 Anthropic
+Messages API에 직접 연결하고, Foundry GPT-5.6은 LiteLLM이 Anthropic Messages와
+OpenAI Responses API를 변환합니다.
 
-> 공식 문서 확인: 2026-07-27. 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로
-> 운영 적용 전 공식 문서를 다시 확인하세요.
+> 공식 문서 확인: Databricks 2026-07-27, Foundry와 LiteLLM 2026-08-01.
+> 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로 운영 적용 전 공식
+> 문서를 다시 확인하세요.
 
-## 1. 5분 연결: 기존 workspace에 Claude Code 연결
+## 1. 연결 흐름 선택
+
+### 흐름 A: Azure Databricks Claude
+
+| 단계 | 목적 | 가이드 |
+| --- | --- | --- |
+| 1 | 로컬 Claude Code에서 Databricks에 직접 연결 | [Databricks 직접 연결](docs/claude-code-databricks.md) |
+| 2 | 기존 LiteLLM 서버를 통해 Claude Code를 Databricks에 연결 | [기존 LiteLLM에서 Databricks 연결](docs/existing-litellm-databricks.md) |
+
+### 흐름 B: Microsoft Foundry GPT-5.6
+
+| 단계 | 목적 | 가이드 |
+| --- | --- | --- |
+| 1 | 로컬 LiteLLM을 통해 Claude Code를 Foundry GPT-5.6에 연결 | [로컬 LiteLLM에서 Foundry 연결](docs/claude-code-foundry-local.md) |
+| 2 | 기존 LiteLLM 서버를 통해 Claude Code를 Foundry GPT-5.6에 연결 | [기존 LiteLLM에서 Foundry 연결](docs/existing-litellm-foundry.md) |
+
+> Foundry GPT-5.6은 Claude Code가 OpenAI Responses API를 직접 호출할 수 없으므로
+> 로컬과 기존 서버 흐름 모두 LiteLLM의 Anthropic Messages 변환을 사용합니다.
+
+> 한 번에 하나의 Claude Code route만 활성화하세요. `~/.claude/settings.json`의
+> `env` 값은 shell 환경변수보다 우선하므로 다른 흐름으로 전환할 때 기존
+> `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` 또는 `apiKeyHelper`, model mapping을
+> 바꾸고 Claude Code를 다시 시작해야 합니다.
+
+## 2. 5분 연결: 기존 Databricks workspace
 
 다음 세 값이 준비되어 있으면 바로 시작할 수 있습니다.
 
@@ -85,7 +110,7 @@ py -3 scripts\configure_claude_code.py
 1개만 유지합니다. `/model` picker에는 Opus·Sonnet 각 2개와 Haiku 1개가 바로 표시되며
 기본 모델은 Opus 5입니다. 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
 
-## 2. Workspace가 없다면
+## 3. Databricks workspace가 없다면
 
 새 Azure Databricks workspace가 필요할 때만
 [Azure Databricks workspace 생성 가이드](docs/azure-databricks-setup.md)를 사용합니다.
@@ -128,15 +153,13 @@ az account set --subscription '<name-or-id>'
 
 Claude Code 설정을 변경하지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 추가하세요.
 
-## 3. 선택 기능
+## 4. 선택 기능
 
 | 목적 | 가이드 |
 | --- | --- |
-| 단일 모델만 유지하는 최소 설정 | [단일 모델 최소 설정](docs/claude-code-databricks.md#5-선택-단일-모델-최소-설정) |
-| 기존 LiteLLM 서버에 Databricks Claude 추가 | [기존 LiteLLM 서버 Databricks 가이드](docs/existing-litellm-server.md) |
-| 기존 LiteLLM 서버에 Microsoft Foundry GPT-5.6 추가 | [기존 LiteLLM 서버 Foundry 가이드](docs/existing-litellm-foundry.md) |
-| PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#8-pat-대신-oauth-u2m) |
-| VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#9-vs-code-extension-사용-시) |
+| 단일 Databricks 모델만 유지하는 최소 설정 | [단일 모델 최소 설정](docs/claude-code-databricks.md#5-선택-단일-모델-최소-설정) |
+| PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#7-pat-대신-oauth-u2m) |
+| VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#8-vs-code-extension-사용-시) |
 | OpenAI 호환 Chat Completions 경로 확인 | [Microsoft Agent Framework 샘플](docs/agent-framework.md) |
 
 MAF는 Claude Code 연결과 독립적인 별도 실습입니다.
@@ -146,8 +169,12 @@ MAF는 Claude Code 연결과 독립적인 별도 실습입니다.
 - PAT나 OAuth access token을 Git에 커밋하지 마세요.
 - PAT는 가장 쉬운 로컬 검증 방법이지만 legacy 인증입니다. 사용자 장기 사용은 OAuth U2M,
   운영 자동화는 OAuth M2M을 사용하세요.
+- 로컬 Foundry 실습의 LiteLLM은 `127.0.0.1`에만 bind하고 local key를 공유하지 마세요.
+- 기존 LiteLLM에서 Foundry에 연결할 때는 API key 대신 host의 managed identity를
+  사용합니다.
 - Workspace와 pay-per-token 모델 사용에는 비용이 발생합니다. 실습용 리소스는 사용 후
   [workspace 생성 가이드의 정리 절차](docs/azure-databricks-setup.md#정리)로 삭제하세요.
+- Foundry GPT-5.6 호출에도 deployment 유형과 token 사용량에 따른 비용이 발생합니다.
 - Foundation Model API의 context window와 workspace 요청 한도는 별개입니다.
 
 ## 공식 문서
