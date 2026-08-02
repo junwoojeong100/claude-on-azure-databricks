@@ -33,6 +33,11 @@ Claude Code
 
 ## 1. 현재 LiteLLM 설정 위치 확인
 
+이 리포에는 `config.yaml`이 없습니다. 이 문서의 `config.yaml`은 고객의 기존 LiteLLM
+서버가 실제로 읽는 설정 파일을 뜻합니다. Admin UI와 database로 설정을 관리한다면
+이 절차를 위해 새 `config.yaml`을 만들지 말고 기존 Admin UI/API에서 같은 모델
+항목을 추가합니다.
+
 LiteLLM을 시작하는 명령에서 실제 설정 파일과 환경변수 주입 위치를 먼저 확인합니다.
 
 ```bash
