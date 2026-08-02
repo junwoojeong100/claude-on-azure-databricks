@@ -64,6 +64,7 @@ class ConfigureClaudeCodeTests(unittest.TestCase):
                 settings["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"],
                 "databricks-claude-sonnet-5[1m]",
             )
+            self.assertNotIn("ANTHROPIC_DEFAULT_FABLE_MODEL", settings["env"])
             self.assertIn("WebSearch", settings["permissions"]["deny"])
             self.assertNotIn("dapi-test-token", result.stdout + result.stderr)
             if os.name != "nt":
@@ -87,6 +88,12 @@ class ConfigureClaudeCodeTests(unittest.TestCase):
                         "env": {
                             "CUSTOM_ENV": "preserved",
                             "CLAUDE_CODE_USE_BEDROCK": "1",
+                            "ANTHROPIC_DEFAULT_FABLE_MODEL": (
+                                "databricks-claude-opus-4-8[1m]"
+                            ),
+                            "ANTHROPIC_CUSTOM_MODEL_OPTION": (
+                                "databricks-claude-sonnet-4-6[1m]"
+                            ),
                         },
                     }
                 ),
@@ -107,6 +114,8 @@ class ConfigureClaudeCodeTests(unittest.TestCase):
             self.assertIn("Bash(rm -rf *)", settings["permissions"]["deny"])
             self.assertEqual(settings["env"]["CUSTOM_ENV"], "preserved")
             self.assertNotIn("CLAUDE_CODE_USE_BEDROCK", settings["env"])
+            self.assertNotIn("ANTHROPIC_DEFAULT_FABLE_MODEL", settings["env"])
+            self.assertNotIn("ANTHROPIC_CUSTOM_MODEL_OPTION", settings["env"])
             backups = list(temp_path.glob("settings.json.bak.*"))
             self.assertEqual(len(backups), 1)
             self.assertIn("Removed conflicting settings", result.stdout)

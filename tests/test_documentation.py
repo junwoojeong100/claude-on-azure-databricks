@@ -193,12 +193,8 @@ class DocumentationTests(unittest.TestCase):
             "ANTHROPIC_DEFAULT_OPUS_MODEL",
             "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
             "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION",
-            "ANTHROPIC_DEFAULT_FABLE_MODEL",
-            "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
             "ANTHROPIC_DEFAULT_SONNET_MODEL",
             "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
-            "ANTHROPIC_CUSTOM_MODEL_OPTION",
-            "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME",
             "ANTHROPIC_DEFAULT_HAIKU_MODEL",
             "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
             "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
@@ -210,9 +206,7 @@ class DocumentationTests(unittest.TestCase):
             "claudeCode.environmentVariables",
             "/status",
             "Opus 5 (1M context)",
-            "Opus 4.8 (1M context)",
             "Sonnet 5 (1M context)",
-            "Sonnet 4.6 (1M context)",
             "Haiku 4.5 (200K context)",
             "## 2. Databricks API부터 검증",
             "## 4. 다중 모델 영구 설정",
@@ -242,26 +236,12 @@ class DocumentationTests(unittest.TestCase):
             settings["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"],
             "Opus 5 (1M context)",
         )
-        self.assertEqual(
-            settings["env"]["ANTHROPIC_DEFAULT_FABLE_MODEL"],
-            "databricks-claude-opus-4-8[1m]",
-        )
-        self.assertEqual(
-            settings["env"]["ANTHROPIC_DEFAULT_FABLE_MODEL_NAME"],
-            "Opus 4.8 (1M context)",
-        )
+        self.assertNotIn("ANTHROPIC_DEFAULT_FABLE_MODEL", settings["env"])
         self.assertEqual(
             settings["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"],
             "databricks-claude-sonnet-5[1m]",
         )
-        self.assertEqual(
-            settings["env"]["ANTHROPIC_CUSTOM_MODEL_OPTION"],
-            "databricks-claude-sonnet-4-6[1m]",
-        )
-        self.assertEqual(
-            settings["env"]["ANTHROPIC_CUSTOM_MODEL_OPTION_NAME"],
-            "Sonnet 4.6 (1M context)",
-        )
+        self.assertNotIn("ANTHROPIC_CUSTOM_MODEL_OPTION", settings["env"])
         minimal_settings = next(
             value
             for value in json_settings
@@ -304,7 +284,6 @@ class DocumentationTests(unittest.TestCase):
         paths = (
             ROOT / ".env.example",
             ROOT / "README.md",
-            ROOT / "docs" / "agent-framework.md",
             ROOT / "docs" / "azure-databricks-setup.md",
             ROOT / "scripts" / "setup_databricks_claude.sh",
         )

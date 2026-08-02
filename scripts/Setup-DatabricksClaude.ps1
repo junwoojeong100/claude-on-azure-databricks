@@ -10,8 +10,7 @@ param(
     [bool]$RotatePat = ($env:ROTATE_PAT -eq '1'),
     [bool]$ConfigureClaudeCode = ($env:CONFIGURE_CLAUDE_CODE -ne '0'),
     [ValidateSet('user', 'project')]
-    [string]$ClaudeCodeScope = $(if ($env:CLAUDE_CODE_SCOPE) { $env:CLAUDE_CODE_SCOPE } else { 'user' }),
-    [bool]$RunAgent = ($env:RUN_AGENT -eq '1')
+    [string]$ClaudeCodeScope = $(if ($env:CLAUDE_CODE_SCOPE) { $env:CLAUDE_CODE_SCOPE } else { 'user' })
 )
 
 Set-StrictMode -Version Latest
@@ -20,8 +19,6 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $EnvPath = Join-Path $RepoRoot '.env'
 $ConfiguratorPath = Join-Path $PSScriptRoot 'configure_claude_code.py'
-$AgentPython = Join-Path $RepoRoot '.venv\Scripts\python.exe'
-$AgentSample = Join-Path $RepoRoot 'src\agent_sample.py'
 $DatabricksAadResource = '2ff814a6-3304-4ab8-85cb-cd0e6f879c1d'
 $EndpointExplicit = (
     $PSBoundParameters.ContainsKey('Endpoint') -or
@@ -183,15 +180,6 @@ Invoke-Python $Python @(
 )
 if ($ConfigureClaudeCode -and -not (Test-Path $ConfiguratorPath)) {
     throw "Claude Code configurator not found: $ConfiguratorPath"
-}
-if ($RunAgent -and -not (Test-Path $AgentPython)) {
-    throw 'RUN_AGENT=1 requires .venv. Follow docs/agent-framework.md.'
-}
-if ($RunAgent) {
-    & $AgentPython -c 'import agent_framework.openai, dotenv, httpx, openai'
-    if ($LASTEXITCODE -ne 0) {
-        throw 'RUN_AGENT=1 requires dependencies from requirements.txt.'
-    }
 }
 $SubscriptionName = (Invoke-Az @('account', 'show', '--query', 'name', '--output', 'tsv')).Trim()
 Write-Success "az logged in - subscription: $SubscriptionName"
@@ -431,29 +419,6 @@ if ($ClaudeCodeReady -and $ConfigureClaudeCode) {
     Write-Success 'skipped (CONFIGURE_CLAUDE_CODE=0)'
 } else {
     Write-Warning 'skipped because the native Anthropic route is not ready'
-}
-
-Write-Step '7/7 Optional Agent Framework sample'
-if ($RunAgent -and $WorkingEndpoint) {
-    $PreviousEndpoint = $env:DATABRICKS_SERVING_ENDPOINT
-    try {
-        $env:DATABRICKS_SERVING_ENDPOINT = $WorkingEndpoint
-        Push-Location $RepoRoot
-        try {
-            '' | & $AgentPython $AgentSample
-            if ($LASTEXITCODE -ne 0) {
-                throw 'Agent Framework sample failed.'
-            }
-        } finally {
-            Pop-Location
-        }
-    } finally {
-        $env:DATABRICKS_SERVING_ENDPOINT = $PreviousEndpoint
-    }
-} elseif ($RunAgent) {
-    Write-Warning 'skipped because no working endpoint was found'
-} else {
-    Write-Success 'skipped (set RUN_AGENT=1 to run the optional sample)'
 }
 
 Write-Host

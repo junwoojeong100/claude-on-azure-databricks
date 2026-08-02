@@ -322,8 +322,8 @@ Anthropic-to-Responses 변환 호환성을 먼저 확인합니다. LiteLLM 버�
 - 같은 LiteLLM에 [Databricks alias](existing-litellm-databricks.md)도 등록되어 있고 virtual
   key가 접근할 수 있으면 기존 `ANTHROPIC_DEFAULT_*` picker 값은 유지할 수 있습니다.
 - Foundry 모델만 제공하는 LiteLLM이면 기존 `databricks-claude-*`를 가리키는 최상위
-  `model`, `ANTHROPIC_DEFAULT_*`, `ANTHROPIC_CUSTOM_MODEL_OPTION*` 값을 제거하고 위처럼
-  `model`을 `foundry-gpt-5.6-sol`로 지정합니다.
+  `model`과 `ANTHROPIC_DEFAULT_*` 값을 제거하고 위처럼 `model`을
+  `foundry-gpt-5.6-sol`로 지정합니다.
 
 Claude Code 2.1.129 이상은 LiteLLM의 `GET /v1/models`를 호출하고 virtual key가 접근할
 수 있는 모델을 `/model` picker의 **From gateway**에 표시합니다. Alias가 보이지 않으면

@@ -118,7 +118,6 @@ def run_workspace_setup_without_venv(
                 "FAKE_PAT_VALIDATION_STATUS": pat_validation_status,
                 "CONFIGURE_CLAUDE_CODE": configure_claude_code,
                 "HOME": str(temp_path / "home"),
-                "RUN_AGENT": "0",
             }
         )
         environment.pop("PYTHON", None)
@@ -145,12 +144,6 @@ def run_workspace_setup_without_venv(
 
 
 class WorkspaceSetupTests(unittest.TestCase):
-    def test_agent_sample_remains_opt_in(self) -> None:
-        script = WORKSPACE_SETUP.read_text(encoding="utf-8")
-
-        self.assertIn('RUN_AGENT="${RUN_AGENT:-0}"', script)
-        self.assertIn("set RUN_AGENT=1 to run the optional sample", script)
-
     def test_setup_does_not_require_venv_by_default(self) -> None:
         result, env_text, settings_text = run_workspace_setup_without_venv()
 

@@ -18,7 +18,7 @@ Claude Code
 3. Opus·Sonnet·Haiku 다중 모델 설정을 파일에 저장
 4. 필요한 경우 OAuth 자동 갱신 또는 단일 모델 최소 설정으로 조정
 
-> 공식 문서 확인: 2026-07-27. Opus 5는 Claude Code 2.1.219 이상, Sonnet 5는
+> 공식 문서 확인: 2026-08-02. Opus 5는 Claude Code 2.1.219 이상, Sonnet 5는
 > 2.1.197 이상이 필요합니다.
 
 ## 1. 준비 사항
@@ -172,14 +172,14 @@ py -3 scripts\configure_claude_code.py
 
 1. 기존 `~/.claude/settings.json`을 `.bak.<timestamp>`로 백업하고 최신 1개만 유지
 2. unrelated settings를 유지하면서 Databricks routing과 picker 키만 병합
-3. 충돌하는 provider routing 키 제거
+3. 충돌하는 provider routing 키와 이전 버전의 우회 picker 키 제거
 4. macOS/Linux/WSL은 `0600`, Windows는 `icacls`로 현재 사용자만 수정하도록 제한
 
 현재 프로젝트에만 적용하려면 `--scope project`를 추가합니다. 이 경우
 `.claude/settings.local.json`에 저장됩니다.
 
-도구가 생성하는 기본 설정은 `/model` picker에 최신 Opus와 Sonnet 각 2개, Haiku 1개를
-처음부터 표시합니다.
+도구가 생성하는 기본 설정은 `/model` picker에 Opus 5, Sonnet 5, Haiku 4.5를
+표시합니다.
 
 ```json
 {
@@ -195,15 +195,9 @@ py -3 scripts\configure_claude_code.py
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-5[1m]",
     "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus 5 (1M context)",
     "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-4-8[1m]",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 4.8 (1M context)",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "databricks-claude-sonnet-5[1m]",
     "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5 (1M context)",
     "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Custom Sonnet model (1M context)",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-4-6[1m]",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Sonnet 4.6 (1M context)",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Custom Sonnet model (1M context)",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-4-5",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku 4.5 (200K context)",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Custom Haiku model (200K context)",
@@ -212,33 +206,28 @@ py -3 scripts\configure_claude_code.py
 }
 ```
 
-Claude Code가 이름을 지정할 수 있는 custom picker 항목은 하나입니다. 따라서 이 구성은
-`fable` picker 자리를 Opus 4.8에 사용하고, custom option을 Sonnet 4.6에 사용합니다.
-`/model fable`을 입력하면 실제 Fable 5가 아니라 Opus 4.8이 선택됩니다.
+기본 picker alias를 다른 모델의 우회 경로로 사용하지 않습니다.
 
 | Picker 모델 | Claude Code 선택값 | Databricks 모델 ID | `contextWindow` |
 | --- | --- | --- | --- |
 | `Opus 5 (1M context)` | `opus` | `databricks-claude-opus-5` | 1,000,000 |
-| `Opus 4.8 (1M context)` | `fable` | `databricks-claude-opus-4-8` | 1,000,000 |
 | `Sonnet 5 (1M context)` | `sonnet` | `databricks-claude-sonnet-5` | 1,000,000 |
-| `Sonnet 4.6 (1M context)` | custom option | `databricks-claude-sonnet-4-6` | 1,000,000 |
 | `Haiku 4.5 (200K context)` | `haiku` | `databricks-claude-haiku-4-5` | 200,000 |
 
-Workspace에서 일부 모델만 호출할 수 있다면 해당 `ANTHROPIC_DEFAULT_*` 또는
-`ANTHROPIC_CUSTOM_MODEL_OPTION*` 항목만 제거하세요. 다른 사용자의 설정에는 영향을 주지
-않습니다.
+Workspace에서 일부 모델만 호출할 수 있다면 해당 `ANTHROPIC_DEFAULT_*` 항목만
+제거하세요. `koreacentral`처럼 Sonnet 5가 없는 리전에서는
+`ANTHROPIC_DEFAULT_SONNET_MODEL`을 `databricks-claude-sonnet-4-6[1m]`으로
+바꾸세요.
 
 Claude Code를 완전히 종료한 뒤 다시 시작해야 picker 항목이 갱신됩니다. JSON을
 수동으로 관리하려면 기존 파일 전체를 덮어쓰지 말고 위 키만 병합하세요.
 
-설정 후 다섯 모델을 한 번에 확인합니다.
+설정 후 세 모델을 한 번에 확인합니다.
 
 ```bash
 models=(
   "databricks-claude-opus-5[1m]"
-  "databricks-claude-opus-4-8[1m]"
   "databricks-claude-sonnet-5[1m]"
-  "databricks-claude-sonnet-4-6[1m]"
   "databricks-claude-haiku-4-5"
 )
 
@@ -254,9 +243,7 @@ Windows PowerShell:
 ```powershell
 $models = @(
   'databricks-claude-opus-5[1m]'
-  'databricks-claude-opus-4-8[1m]'
   'databricks-claude-sonnet-5[1m]'
-  'databricks-claude-sonnet-4-6[1m]'
   'databricks-claude-haiku-4-5'
 )
 
@@ -267,7 +254,7 @@ $models | ForEach-Object {
 }
 ```
 
-다섯 응답 모두 `is_error`가 `false`여야 합니다. `modelUsage`에는 선택한 모델에 대응하는
+세 응답 모두 `is_error`가 `false`여야 합니다. `modelUsage`에는 선택한 모델에 대응하는
 `databricks-claude-*` ID가 표시됩니다.
 
 > **완료 기준:** 새 Claude Code session의 `/status`에 Databricks Anthropic base URL이
@@ -302,14 +289,10 @@ selector입니다. Claude Code는 selector를 제거한 Databricks 모델 ID를 
 | Databricks 모델 | 모델 context window |
 | --- | --- |
 | `databricks-claude-opus-5` | 1M tokens |
-| `databricks-claude-opus-4-8` | 1M tokens |
-| `databricks-claude-opus-4-7` | 1M tokens |
-| `databricks-claude-opus-4-6` | 1M tokens |
-| `databricks-claude-opus-4-5` | 200K tokens |
 | `databricks-claude-sonnet-5` | 1M tokens |
-| `databricks-claude-sonnet-4-6` | 1M tokens |
-| `databricks-claude-sonnet-4-5` | 200K tokens |
 | `databricks-claude-haiku-4-5` | 200K tokens |
+
+다른 모델을 사용하려면 공식 지원 모델 표에서 해당 모델의 context window를 확인하세요.
 
 모델 context window와 Azure Databricks workspace 요청 한도는 별개입니다. 공식
 Enterprise-tier pay-per-token 표의 Claude 한도는 ITPM 200K, OTPM 20K이고 payload

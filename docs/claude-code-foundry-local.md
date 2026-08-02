@@ -285,9 +285,8 @@ done
 ```
 
 이 리포의 `scripts/configure_claude_code.py`는 Databricks 직접 연결용이므로 실행하지
-않습니다. 이전 Databricks 설정의 `ANTHROPIC_DEFAULT_*`와
-`ANTHROPIC_CUSTOM_MODEL_OPTION*`이 남아 있으면 local Foundry에 없는 alias를 가리키므로
-제거합니다.
+않습니다. 이전 Databricks 설정의 `ANTHROPIC_DEFAULT_*` 값이 남아 있으면 local
+Foundry에 없는 alias를 가리키므로 제거합니다.
 
 VS Code extension을 사용하면 VS Code 사용자 settings의
 `claudeCode.environmentVariables`에도 같은 네 환경변수를 설정합니다.

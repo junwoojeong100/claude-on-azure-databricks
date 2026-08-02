@@ -7,7 +7,7 @@ Claude Code를 Azure Databricks Claude 또는 Microsoft Foundry GPT-5.6에 연�
 Messages API에 직접 연결하고, Foundry GPT-5.6은 LiteLLM이 Anthropic Messages와
 OpenAI Responses API를 변환합니다.
 
-> 공식 문서 확인: Databricks 2026-07-27, Foundry와 LiteLLM 2026-08-01.
+> 공식 문서 확인: 2026-08-02.
 > 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로 운영 적용 전 공식
 > 문서를 다시 확인하세요.
 
@@ -107,7 +107,7 @@ py -3 scripts\configure_claude_code.py
 ```
 
 도구는 기존 `~/.claude/settings.json`을 백업하고 관련 키만 병합합니다. 백업은 최신
-1개만 유지합니다. `/model` picker에는 Opus·Sonnet 각 2개와 Haiku 1개가 바로 표시되며
+1개만 유지합니다. `/model` picker에는 Opus 5, Sonnet 5, Haiku 4.5가 표시되며
 기본 모델은 Opus 5입니다. 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
 
 ## 3. Databricks workspace가 없다면
@@ -160,9 +160,6 @@ Claude Code 설정을 변경하지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 추
 | 단일 Databricks 모델만 유지하는 최소 설정 | [단일 모델 최소 설정](docs/claude-code-databricks.md#5-선택-단일-모델-최소-설정) |
 | PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#7-pat-대신-oauth-u2m) |
 | VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#8-vs-code-extension-사용-시) |
-| OpenAI 호환 Chat Completions 경로 확인 | [Microsoft Agent Framework 샘플](docs/agent-framework.md) |
-
-MAF는 Claude Code 연결과 독립적인 별도 실습입니다.
 
 ## 보안과 비용
 

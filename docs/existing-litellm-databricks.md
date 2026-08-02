@@ -118,19 +118,9 @@ model_list:
       model: databricks/databricks-claude-opus-5
       api_base: os.environ/DATABRICKS_API_BASE
 
-  - model_name: databricks-claude-opus-4-8
-    litellm_params:
-      model: databricks/databricks-claude-opus-4-8
-      api_base: os.environ/DATABRICKS_API_BASE
-
   - model_name: databricks-claude-sonnet-5
     litellm_params:
       model: databricks/databricks-claude-sonnet-5
-      api_base: os.environ/DATABRICKS_API_BASE
-
-  - model_name: databricks-claude-sonnet-4-6
-    litellm_params:
-      model: databricks/databricks-claude-sonnet-4-6
       api_base: os.environ/DATABRICKS_API_BASE
 
   - model_name: databricks-claude-haiku-4-5
