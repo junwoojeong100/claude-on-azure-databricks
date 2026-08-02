@@ -53,8 +53,16 @@ Databricks 모델을 추가하세요. YAML 모델과 동일한 `model_name`을 �
 
 ## 2. LiteLLM 서버에 Databricks credential 추가
 
-운영 환경은 Databricks service principal의 OAuth M2M을 권장합니다. LiteLLM process에
-다음 환경변수를 주입합니다.
+다음 두 방식 중 **하나만** 선택해 LiteLLM process에 환경변수로 주입합니다.
+
+| 용도 | 인증 방식 | 설정할 환경변수 |
+| --- | --- | --- |
+| 운영 환경 | OAuth M2M 권장 | `DATABRICKS_CLIENT_ID`, `DATABRICKS_CLIENT_SECRET` |
+| 빠른 검증 | PAT | `DATABRICKS_API_KEY` |
+
+### 방법 A: OAuth M2M
+
+Databricks service principal의 application ID와 OAuth secret을 사용합니다.
 
 ```dotenv
 DATABRICKS_API_BASE=https://<workspace-host>/serving-endpoints
@@ -62,26 +70,39 @@ DATABRICKS_CLIENT_ID=<service-principal-application-id>
 DATABRICKS_CLIENT_SECRET=<service-principal-secret>
 ```
 
-빠른 검증에만 PAT를 사용한다면 client ID와 secret 대신 다음 값을 설정합니다.
+LiteLLM은 이 값으로 workspace OAuth token을 발급받아 Databricks를 호출합니다.
+
+### 방법 B: PAT
+
+빠른 검증에만 PAT를 사용합니다. 이 방식을 선택했다면 LiteLLM process에 기존
+`DATABRICKS_CLIENT_ID`와 `DATABRICKS_CLIENT_SECRET`이 남아 있지 않은지 확인합니다.
 
 ```dotenv
 DATABRICKS_API_BASE=https://<workspace-host>/serving-endpoints
 DATABRICKS_API_KEY=<databricks-pat>
 ```
 
-`DATABRICKS_API_BASE`에는 `/anthropic`이나 `/v1/messages`를 붙이지 않습니다. credential은
-`config.yaml`, 컨테이너 이미지 또는 Git에 저장하지 말고 기존 Secret 관리 방식을
-사용합니다.
+LiteLLM의 인증 선택 순서는 **OAuth M2M → PAT → Databricks SDK 기본 인증**입니다.
+따라서 M2M 환경변수와 PAT를 함께 넣으면 M2M이 사용됩니다. Route-optimized endpoint는
+OAuth가 필요하므로 PAT 대신 방법 A를 사용합니다.
 
-Service principal에는 workspace 접근 권한과 모델 호출 권한이 필요합니다. Foundation
-Model Unity Catalog 권한 기능을 사용하면 대상 `system.ai` 모델의 `EXECUTE`, custom
-serving endpoint라면 endpoint의 `CAN QUERY`도 확인합니다.
+두 방식 모두 `DATABRICKS_API_BASE`에는 `/anthropic`, `/v1/messages` 또는
+`/chat/completions`를 붙이지 않습니다. LiteLLM이 backend 요청 경로를 추가합니다.
+Credential은 `config.yaml`, 컨테이너 이미지 또는 Git에 저장하지 말고 기존 Secret
+관리 방식을 사용합니다.
+
+Service principal에는 workspace 접근 권한과 호출 대상에 대한 권한이 필요합니다.
+
+- Pay-per-token foundation model: Foundation Model Unity Catalog 권한 기능으로
+  기본 접근을 제한했다면 `system.ai` schema 또는 대상 모델의 `EXECUTE`
+- Custom 또는 provisioned serving endpoint: endpoint의 `CAN QUERY`
 
 ## 3. 기존 `model_list`에 Databricks Claude 추가
 
 현재 `config.yaml`의 기존 `model_list` 항목을 유지한 채 아래 항목을 병합합니다.
 `model_name`은 Claude Code가 보내는 이름이고, `litellm_params.model`은 LiteLLM이
-Databricks provider로 전달할 backend 이름입니다.
+Databricks provider로 전달할 backend 이름입니다. 인증정보는 2절의 process
+환경변수에서 읽으므로 M2M과 PAT 모두 아래 YAML을 그대로 사용합니다.
 
 ```yaml
 model_list:
@@ -111,19 +132,13 @@ model_list:
     litellm_params:
       model: databricks/databricks-claude-haiku-4-5
       api_base: os.environ/DATABRICKS_API_BASE
-
-general_settings:
-  # 기존 master_key 또는 database 설정을 유지합니다.
-  master_key: os.environ/LITELLM_MASTER_KEY
 ```
 
-OAuth M2M 환경변수를 사용하면 LiteLLM이 `DATABRICKS_CLIENT_ID`와
-`DATABRICKS_CLIENT_SECRET`을 사용합니다. PAT 방식은 각 항목에 다음 줄을 추가하거나,
-LiteLLM process의 `DATABRICKS_API_KEY` 자동 인식을 사용합니다.
-
-```yaml
-      api_key: os.environ/DATABRICKS_API_KEY
-```
+YAML에 `api_key`를 추가할 필요가 없습니다. 방법 A에서는 LiteLLM이
+`DATABRICKS_CLIENT_ID`와 `DATABRICKS_CLIENT_SECRET`을 사용하고, 방법 B에서는
+`DATABRICKS_API_KEY`를 사용합니다. 이 process의 전역 Databricks 환경변수는 등록된
+모든 `databricks/...` 모델에 적용되므로 서로 다른 workspace credential을 섞지
+않습니다.
 
 Workspace에서 호출할 수 없는 모델은 등록하지 않습니다. `[1m]` suffix도 LiteLLM
 `model_name`에 넣지 않습니다. Claude Code가 `databricks-claude-opus-5[1m]`처럼
@@ -131,7 +146,7 @@ Workspace에서 호출할 수 없는 모델은 등록하지 않습니다. `[1m]`
 별도로 추가합니다.
 
 기존 `general_settings`, `router_settings`, callback, budget, rate limit와 database
-설정을 위 예시로 덮어쓰지 말고 필요한 항목만 병합합니다.
+설정은 변경하지 않고 `model_list`의 필요한 항목만 병합합니다.
 
 ## 4. LiteLLM 재시작 전후 검증
 
@@ -247,3 +262,5 @@ VS Code extension도 사용한다면 VS Code 사용자 settings의
 - [LiteLLM proxy configuration](https://docs.litellm.ai/docs/proxy/configs)
 - [Claude Code LLM gateway 연결](https://code.claude.com/docs/en/llm-gateway-connect)
 - [Azure Databricks OAuth M2M](https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m)
+- [Foundation model Unity Catalog 권한](https://learn.microsoft.com/azure/databricks/machine-learning/foundation-model-apis/model-uc-permissions)
+- [Model serving endpoint 권한 관리](https://learn.microsoft.com/azure/databricks/machine-learning/model-serving/manage-serving-endpoints#permissions)
