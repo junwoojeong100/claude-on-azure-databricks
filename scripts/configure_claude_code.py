@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely merge Azure Databricks multi-model settings into Claude Code."""
+"""Safely merge one verified Azure Databricks model into Claude Code."""
 
 from __future__ import annotations
 
@@ -16,26 +16,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-DEFAULT_MODEL = "databricks-claude-opus-5[1m]"
-DEFAULT_SONNET_MODEL = "databricks-claude-sonnet-5[1m]"
+DEFAULT_MODEL = "databricks-claude-opus-5"
 ANTHROPIC_PATH = "/serving-endpoints/anthropic"
-MODEL_ENV = {
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-5[1m]",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus 5 (1M context)",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-4-8[1m]",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 4.8 (1M context)",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": DEFAULT_SONNET_MODEL,
-    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5 (1M context)",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Custom Sonnet model (1M context)",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-4-6[1m]",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Sonnet 4.6 (1M context)",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Custom Sonnet model (1M context)",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-4-5",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku 4.5 (200K context)",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Custom Haiku model (200K context)",
-    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
+ONE_MILLION_MODEL_IDS = {
+    "databricks-claude-opus-5",
+    "databricks-claude-sonnet-5",
+    "databricks-claude-sonnet-4-6",
 }
 CONFLICTING_ENV_KEYS = {
     "ANTHROPIC_API_KEY",
@@ -44,13 +30,11 @@ CONFLICTING_ENV_KEYS = {
     "CLAUDE_CODE_USE_FOUNDRY",
     "CLAUDE_CODE_USE_VERTEX",
 }
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Merge Azure Databricks routing and multi-model picker settings into "
-            "Claude Code without overwriting unrelated settings."
+            "Merge Azure Databricks routing and one verified model into Claude Code "
+            "without overwriting unrelated settings."
         )
     )
     parser.add_argument(
@@ -68,6 +52,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--host",
         help="Azure Databricks workspace URL. Defaults to environment or .env.",
+    )
+    parser.add_argument(
+        "--model",
+        help=(
+            "Verified Databricks model ID. Defaults to DATABRICKS_SERVING_ENDPOINT, "
+            "DATABRICKS_MODEL, .env, or databricks-claude-opus-5."
+        ),
     )
     parser.add_argument(
         "--profile",
@@ -132,6 +123,15 @@ def normalize_base_url(value: str) -> str:
     return base_url
 
 
+def normalize_model(value: str) -> str:
+    model = value.strip()
+    if not model or any(character.isspace() for character in model):
+        raise ValueError("Model must be a non-empty ID without whitespace.")
+    if model.endswith("[1m]") or model not in ONE_MILLION_MODEL_IDS:
+        return model
+    return f"{model}[1m]"
+
+
 def resolve_settings_path(args: argparse.Namespace) -> Path:
     if args.settings_path:
         return args.settings_path.expanduser().resolve()
@@ -177,6 +177,7 @@ def merge_settings(
     existing: dict[str, object],
     *,
     base_url: str,
+    model: str,
     auth: str,
     token: str | None,
     profile: str,
@@ -197,14 +198,21 @@ def merge_settings(
         deny_list.append("WebSearch")
 
     env = require_dict(settings, "env")
-    for key in CONFLICTING_ENV_KEYS:
+    removable_keys = set(CONFLICTING_ENV_KEYS)
+    removable_keys.update(
+        key
+        for key in env
+        if key.startswith("ANTHROPIC_DEFAULT_")
+        or key.startswith("ANTHROPIC_CUSTOM_MODEL_OPTION")
+    )
+    for key in removable_keys:
         if key in env:
             removed_conflicts.append(key)
             env.pop(key)
 
-    env.update(MODEL_ENV)
     env["ANTHROPIC_BASE_URL"] = base_url
-    settings["model"] = DEFAULT_MODEL
+    env["CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS"] = "1"
+    settings["model"] = model
 
     if auth == "pat":
         if not token:
@@ -312,14 +320,24 @@ def main() -> int:
         env_file.get("DATABRICKS_TOKEN"),
         env_file.get("ANTHROPIC_AUTH_TOKEN"),
     )
+    raw_model = first_value(
+        args.model,
+        os.environ.get("DATABRICKS_SERVING_ENDPOINT"),
+        os.environ.get("DATABRICKS_MODEL"),
+        env_file.get("DATABRICKS_SERVING_ENDPOINT"),
+        env_file.get("DATABRICKS_MODEL"),
+        DEFAULT_MODEL,
+    )
     path = resolve_settings_path(args)
 
     try:
         base_url = normalize_base_url(raw_host)
+        model = normalize_model(raw_model)
         existing = load_settings(path)
         settings, removed_conflicts = merge_settings(
             existing,
             base_url=base_url,
+            model=model,
             auth=args.auth,
             token=token,
             profile=args.profile,
@@ -329,8 +347,7 @@ def main() -> int:
         raise SystemExit(str(exc)) from exc
 
     print(f"Claude Code settings: {path}")
-    print(f"Default model: {DEFAULT_MODEL}")
-    print("Models: Opus 5, Opus 4.8, Sonnet 5, Sonnet 4.6, Haiku 4.5")
+    print(f"Model: {model}")
     if backup_path:
         print(f"Backup: {backup_path}")
     if removed_conflicts:

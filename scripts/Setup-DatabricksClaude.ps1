@@ -10,8 +10,7 @@ param(
     [bool]$RotatePat = ($env:ROTATE_PAT -eq '1'),
     [bool]$ConfigureClaudeCode = ($env:CONFIGURE_CLAUDE_CODE -ne '0'),
     [ValidateSet('user', 'project')]
-    [string]$ClaudeCodeScope = $(if ($env:CLAUDE_CODE_SCOPE) { $env:CLAUDE_CODE_SCOPE } else { 'user' }),
-    [bool]$RunAgent = ($env:RUN_AGENT -eq '1')
+    [string]$ClaudeCodeScope = $(if ($env:CLAUDE_CODE_SCOPE) { $env:CLAUDE_CODE_SCOPE } else { 'project' })
 )
 
 Set-StrictMode -Version Latest
@@ -20,8 +19,6 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $EnvPath = Join-Path $RepoRoot '.env'
 $ConfiguratorPath = Join-Path $PSScriptRoot 'configure_claude_code.py'
-$AgentPython = Join-Path $RepoRoot '.venv\Scripts\python.exe'
-$AgentSample = Join-Path $RepoRoot 'src\agent_sample.py'
 $DatabricksAadResource = '2ff814a6-3304-4ab8-85cb-cd0e6f879c1d'
 $EndpointExplicit = (
     $PSBoundParameters.ContainsKey('Endpoint') -or
@@ -184,15 +181,6 @@ Invoke-Python $Python @(
 if ($ConfigureClaudeCode -and -not (Test-Path $ConfiguratorPath)) {
     throw "Claude Code configurator not found: $ConfiguratorPath"
 }
-if ($RunAgent -and -not (Test-Path $AgentPython)) {
-    throw 'RUN_AGENT=1 requires .venv. Follow docs/agent-framework.md.'
-}
-if ($RunAgent) {
-    & $AgentPython -c 'import agent_framework.openai, dotenv, httpx, openai'
-    if ($LASTEXITCODE -ne 0) {
-        throw 'RUN_AGENT=1 requires dependencies from requirements.txt.'
-    }
-}
 $SubscriptionName = (Invoke-Az @('account', 'show', '--query', 'name', '--output', 'tsv')).Trim()
 Write-Success "az logged in - subscription: $SubscriptionName"
 
@@ -301,6 +289,13 @@ DATABRICKS_SERVING_ENDPOINT=$Endpoint
 # Fast local validation: Databricks Personal Access Token (PAT)
 DATABRICKS_TOKEN=$Token
 "@
+if (Test-Path $EnvPath) {
+    $Timestamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
+    $EnvBackupPath = "$EnvPath.bak.$Timestamp"
+    Copy-Item $EnvPath $EnvBackupPath
+    Protect-File $EnvBackupPath
+    Write-Success "existing .env backed up: $EnvBackupPath"
+}
 [IO.File]::WriteAllText(
     $EnvPath,
     $EnvContent,
@@ -412,14 +407,15 @@ if ($ClaudeCodeReady -and $ConfigureClaudeCode) {
         $env:DATABRICKS_TOKEN = $Token
         $ConfiguratorArguments = @(
             $ConfiguratorPath,
-            '--scope', $ClaudeCodeScope
+            '--scope', $ClaudeCodeScope,
+            '--model', $Endpoint
         )
         if ($ClaudeCodeScope -eq 'project') {
             $ConfiguratorArguments += @('--project-dir', $RepoRoot)
         }
         Invoke-Python $Python @ConfiguratorArguments
         $ClaudeSettingsConfigured = $true
-        Write-Success "Claude Code multi-model settings configured (scope: $ClaudeCodeScope)"
+        Write-Success "Claude Code settings configured for verified model '$Endpoint' (scope: $ClaudeCodeScope)"
     } catch {
         $ClaudeSettingsFailed = $true
         Write-Warning "workspace and model are ready, but Claude Code settings configuration failed: $($_.Exception.Message)"
@@ -433,35 +429,12 @@ if ($ClaudeCodeReady -and $ConfigureClaudeCode) {
     Write-Warning 'skipped because the native Anthropic route is not ready'
 }
 
-Write-Step '7/7 Optional Agent Framework sample'
-if ($RunAgent -and $WorkingEndpoint) {
-    $PreviousEndpoint = $env:DATABRICKS_SERVING_ENDPOINT
-    try {
-        $env:DATABRICKS_SERVING_ENDPOINT = $WorkingEndpoint
-        Push-Location $RepoRoot
-        try {
-            '' | & $AgentPython $AgentSample
-            if ($LASTEXITCODE -ne 0) {
-                throw 'Agent Framework sample failed.'
-            }
-        } finally {
-            Pop-Location
-        }
-    } finally {
-        $env:DATABRICKS_SERVING_ENDPOINT = $PreviousEndpoint
-    }
-} elseif ($RunAgent) {
-    Write-Warning 'skipped because no working endpoint was found'
-} else {
-    Write-Success 'skipped (set RUN_AGENT=1 to run the optional sample)'
-}
-
 Write-Host
 Write-Success "Done. Workspace: $WorkspaceUrl"
 if ($WorkingEndpoint -eq $Endpoint) {
     Write-Success "OpenAI-compatible route for '$Endpoint' is live; .env is ready."
     if ($ClaudeCodeReady -and $ClaudeSettingsConfigured) {
-        Write-Success "Claude Code is ready. Run 'claude' and select a Databricks model with /model."
+        Write-Success "Claude Code is ready. Run 'claude' from this project."
     } elseif (-not $ClaudeCodeReady) {
         Write-Warning 'Native Anthropic route is not ready; Claude Code is not ready for this model.'
     }

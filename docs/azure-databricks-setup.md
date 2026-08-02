@@ -28,23 +28,19 @@ classic workspace를 만듭니다. 조직이 serverless workspace를 제공한�
 - [지원 모델](https://learn.microsoft.com/azure/databricks/machine-learning/foundation-model-apis/supported-models)
 - [리전별 Foundation Model 가용성](https://learn.microsoft.com/azure/databricks/machine-learning/model-serving/foundation-model-overview)
 
-이 가이드와 스크립트의 기본 예시는 Opus 4.8, Sonnet 5, Haiku 4.5를 cross-Geo 없이
-제공하는 `eastus2`를 사용합니다. `koreacentral`에서는 Opus 4.8과 Haiku 4.5가
+이 가이드와 스크립트의 기본 예시는 Opus 5, Sonnet 5, Haiku 4.5를 제공하는
+`eastus2`를 사용합니다. `koreacentral`에서는 Opus 5, Sonnet 4.6, Haiku 4.5가
 cross-Geo 대상으로 표시되지만 Sonnet 5는 현재 리전 표에 없습니다. 한국 리전을
-선택한다면 Sonnet 4.6 같은 제공 모델로 mapping을 바꾸고, 계정 관리자가
+선택한다면 Sonnet mapping을 Sonnet 4.6으로 바꾸고, 계정 관리자가
 [cross-Geo 처리 설정](https://learn.microsoft.com/azure/databricks/resources/databricks-geos#cross-geo-processing)과
 조직의 데이터 레지던시 요구사항을 먼저 확인해야 합니다.
 
-이 스크립트의 기본 smoke test 모델과 Claude Code의 `/model` picker 구성은 서로
-독립적입니다. Smoke test는 모델 하나로 연결을 확인하고, Claude Code 설정은
-[Claude Code 연결 가이드](claude-code-databricks.md#4-다중-모델-영구-설정)의 기본
-다중 모델 구성을 적용하세요.
+스크립트는 smoke test에 성공한 모델 하나만 Claude Code 설정에 저장합니다. 검증하지
+않은 모델을 picker에 추가하지 않습니다.
 
 ## 1. 자동 생성
 
-자동 스크립트는 workspace를 만든 뒤 빠른 로컬 검증용 PAT와 `.env`까지
-준비합니다.
-Microsoft Agent Framework 샘플은 기본적으로 실행하지 않습니다.
+자동 스크립트는 workspace를 만든 뒤 빠른 로컬 검증용 PAT와 `.env`까지 준비합니다.
 
 ### 로컬 환경 준비
 
@@ -101,20 +97,19 @@ PowerShell에서는 `-ResourceGroup`, `-Location`, `-Workspace` 같은 parameter
 | `WORKSPACE` | `ws-databricks-claude` | Databricks workspace |
 | `SKU` | `premium` | Workspace SKU |
 | `DATABRICKS_SERVING_ENDPOINT` | `databricks-claude-opus-5` | 검증할 기본 Claude 모델 |
-| `CONFIGURE_CLAUDE_CODE` | `1` | 성공 시 Claude Code 다중 모델 설정 병합 |
-| `CLAUDE_CODE_SCOPE` | `user` | `user` 또는 `project` 설정 범위 |
-| `RUN_AGENT` | `0` | 선택 MAF 샘플 실행 여부 |
+| `CONFIGURE_CLAUDE_CODE` | `1` | 성공 시 검증한 모델의 Claude Code 설정 병합 |
+| `CLAUDE_CODE_SCOPE` | `project` | `project` 또는 `user` 설정 범위 |
 
 스크립트는 다음 작업을 수행합니다.
 
 1. 리소스 그룹과 Premium Databricks workspace 생성 또는 재사용
 2. Azure 로그인으로 로컬 검증용 PAT 생성 또는 기존 유효 PAT 재사용
-3. 프로젝트 루트에 권한이 제한된 `.env` 작성
+3. 기존 `.env`가 있으면 백업하고 프로젝트 루트에 새 `.env` 작성
 4. 설정한 Claude 모델의 OpenAI 호환 API와 네이티브 Anthropic API smoke test
-5. 기존 설정을 백업하고 Claude Code 다중 모델 설정 병합
+5. 검증한 모델 하나를 Claude Code 설정에 병합
 
-OpenAI 호환 경로만 성공하고 네이티브 Anthropic 경로가 실패하면 MAF 진단에는 `.env`를
-사용할 수 있지만 Claude Code 연결은 아직 준비되지 않은 상태입니다.
+OpenAI 호환 경로만 성공하고 네이티브 Anthropic 경로가 실패하면 Claude Code 설정은
+변경하지 않습니다.
 
 정상 완료 후 프로젝트 루트의 `.env`에 다음 값이 저장됩니다.
 
@@ -124,13 +119,17 @@ DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-5
 DATABRICKS_TOKEN=<databricks-token>
 ```
 
-Claude Code 설정은 기본적으로 `~/.claude/settings.json`에 병합됩니다. 기존 파일은
-변경 전에 `.bak.<timestamp>`로 백업하며 최신 백업 1개만 유지합니다. 현재 프로젝트에만
-적용하려면 다음처럼 실행하세요.
+Claude Code 설정은 기본적으로 현재 repository의 `.claude/settings.local.json`에
+병합됩니다. 기존 파일은 변경 전에 `.bak.<timestamp>`로 백업하며 최신 백업 1개만
+유지합니다. 모든 프로젝트에 적용해야 할 때만 다음처럼 user scope를 선택하세요.
 
 ```bash
-CLAUDE_CODE_SCOPE=project scripts/setup_databricks_claude.sh
+CLAUDE_CODE_SCOPE=user scripts/setup_databricks_claude.sh
 ```
+
+기존 프로젝트 루트 `.env`는 덮어쓰기 전에 `.env.bak.<timestamp>`로 백업됩니다.
+백업에도 credential이 포함되므로 원본과 동일하게 안전하게 보관하고, 더 이상 필요하지
+않으면 삭제하세요.
 
 Claude Code 설정을 건드리지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 사용합니다.
 
@@ -140,6 +139,22 @@ Claude Code 설정을 건드리지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 사
 ```bash
 ROTATE_PAT=1 scripts/setup_databricks_claude.sh
 ```
+
+### 최종 확인
+
+스크립트가 완료된 뒤 새 터미널에서 repository root로 이동해 실행합니다.
+
+```bash
+cd /path/to/claude-on-azure-databricks
+claude -p "Reply with exactly: WORKSPACE SETUP OK" --output-format json
+```
+
+Windows PowerShell에서는 먼저
+`Set-Location C:\path\to\claude-on-azure-databricks`를 실행합니다.
+
+`is_error`가 `false`이고 `modelUsage`에 검증한 Databricks 모델 ID가 표시되어야 합니다.
+대화형 `/status`에서는 Anthropic base URL이 workspace의
+`/serving-endpoints/anthropic`인지 확인합니다.
 
 ## 2. Workspace만 생성: Azure CLI
 
@@ -210,35 +225,12 @@ Workspace 생성만으로 모든 Claude 모델을 호출할 수 있는 것은 �
 
 Workspace URL, 호출 가능한 Claude 모델 ID, token을 준비한 뒤
 [기존 workspace에 Claude Code 연결하기](claude-code-databricks.md)를 따릅니다.
-이 경로는 MAF를 사용하지 않습니다.
-
-프로젝트 루트의 `.env`가 준비되어 있다면 다음 명령으로 다중 모델 설정을 바로
-병합할 수 있습니다.
+프로젝트 루트의 `.env`가 준비되어 있다면 다음 명령으로 `.env`에 지정된 모델 하나를
+현재 프로젝트 설정에 바로 병합할 수 있습니다.
 
 ```bash
-python3 scripts/configure_claude_code.py
+python3 scripts/configure_claude_code.py --scope project
 ```
-
-### Microsoft Agent Framework 테스트
-
-MAF는 OpenAI 호환 Chat Completions API를 확인하는 별도 실습입니다. Workspace 생성이나
-Claude Code 연결의 필수 단계는 아니지만, 관련 가이드와 샘플 코드는 계속 제공합니다.
-
-자동 생성 스크립트와 함께 한 번만 실행:
-
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-RUN_AGENT=1 scripts/setup_databricks_claude.sh
-```
-
-이미 `.env`가 준비되어 있다면 직접 실행:
-
-```bash
-.venv/bin/python src/agent_sample.py
-```
-
-자세한 내용은 [Microsoft Agent Framework 실습](agent-framework.md)을 확인하세요.
 
 ## 자주 발생하는 문제
 
