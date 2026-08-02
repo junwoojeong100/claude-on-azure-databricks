@@ -341,6 +341,10 @@ class DocumentationTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         for required_text in (
+            "이 리포에는 `config.yaml`이 없습니다",
+            "고객의 기존 LiteLLM",
+            "서버가 실제로 읽는 설정 파일",
+            "새 `config.yaml`을 만들지 말고",
             "다음 두 방식 중 **하나만** 선택",
             "### 방법 A: OAuth M2M",
             "### 방법 B: PAT",
