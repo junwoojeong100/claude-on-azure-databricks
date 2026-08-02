@@ -335,6 +335,35 @@ class DocumentationTests(unittest.TestCase):
         ):
             self.assertIn(required_text, script)
 
+    def test_existing_litellm_databricks_separates_auth_methods(self) -> None:
+        guide = (
+            ROOT / "docs" / "existing-litellm-databricks.md"
+        ).read_text(encoding="utf-8")
+
+        for required_text in (
+            "다음 두 방식 중 **하나만** 선택",
+            "### 방법 A: OAuth M2M",
+            "### 방법 B: PAT",
+            "OAuth M2M → PAT → Databricks SDK 기본 인증",
+            "Route-optimized endpoint는",
+            "`system.ai` schema 또는 대상 모델의 `EXECUTE`",
+            "endpoint의 `CAN QUERY`",
+            "M2M과 PAT 모두 아래 YAML을 그대로 사용",
+            "YAML에 `api_key`를 추가할 필요가 없습니다",
+            "서로 다른 workspace credential을 섞지",
+        ):
+            self.assertIn(required_text, guide)
+
+        self.assertEqual(guide.count("DATABRICKS_API_KEY=<databricks-pat>"), 1)
+        self.assertNotIn(
+            "api_key: os.environ/DATABRICKS_API_KEY",
+            guide,
+        )
+        self.assertNotIn(
+            "master_key: os.environ/LITELLM_MASTER_KEY",
+            guide,
+        )
+
     def test_existing_litellm_uses_managed_identity_for_foundry(self) -> None:
         guide = (ROOT / "docs" / "existing-litellm-foundry.md").read_text(
             encoding="utf-8"
