@@ -38,7 +38,7 @@ def run_workspace_setup_without_venv(
         if existing_env is not None:
             (temp_path / ".env").write_text(existing_env, encoding="utf-8")
         if existing_settings is not None:
-            settings_path = temp_path / "home" / ".claude" / "settings.json"
+            settings_path = temp_path / ".claude" / "settings.local.json"
             settings_path.parent.mkdir(parents=True)
             settings_path.write_text(existing_settings, encoding="utf-8")
 
@@ -134,18 +134,22 @@ def run_workspace_setup_without_venv(
             if (temp_path / ".env").exists()
             else None
         )
-        settings_path = temp_path / "home" / ".claude" / "settings.json"
+        settings_path = temp_path / ".claude" / "settings.local.json"
         settings_text = (
             settings_path.read_text(encoding="utf-8")
             if settings_path.exists()
             else None
         )
-        return result, env_text, settings_text
+        env_backups = sorted(temp_path.glob(".env.bak.*"))
+        env_backup_text = (
+            env_backups[-1].read_text(encoding="utf-8") if env_backups else None
+        )
+        return result, env_text, settings_text, env_backup_text
 
 
 class WorkspaceSetupTests(unittest.TestCase):
     def test_setup_does_not_require_venv_by_default(self) -> None:
-        result, env_text, settings_text = run_workspace_setup_without_venv()
+        result, env_text, settings_text, _ = run_workspace_setup_without_venv()
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIsNotNone(env_text)
@@ -155,10 +159,11 @@ class WorkspaceSetupTests(unittest.TestCase):
             '"model": "databricks-claude-opus-5[1m]"',
             settings_text,
         )
+        self.assertIn("settings.local.json", result.stdout)
         self.assertIn("Claude Code is ready", result.stdout)
 
     def test_native_failure_does_not_report_claude_code_ready(self) -> None:
-        result, env_text, settings_text = run_workspace_setup_without_venv(
+        result, env_text, settings_text, _ = run_workspace_setup_without_venv(
             native_status="400"
         )
 
@@ -174,13 +179,15 @@ class WorkspaceSetupTests(unittest.TestCase):
             "DATABRICKS_TOKEN=dapi-existing-token\n"
         )
 
-        result, env_text, _ = run_workspace_setup_without_venv(
+        result, env_text, _, env_backup_text = run_workspace_setup_without_venv(
             existing_env=existing_env
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIsNotNone(env_text)
         self.assertIn("DATABRICKS_TOKEN=dapi-existing-token", env_text)
+        self.assertEqual(env_backup_text, existing_env)
+        self.assertIn("existing .env backed up", result.stdout)
         self.assertIn("reusing the valid PAT already stored in .env", result.stdout)
 
     def test_invalid_existing_pat_is_replaced(self) -> None:
@@ -190,7 +197,7 @@ class WorkspaceSetupTests(unittest.TestCase):
             "DATABRICKS_TOKEN=dapi-expired-token\n"
         )
 
-        result, env_text, _ = run_workspace_setup_without_venv(
+        result, env_text, _, env_backup_text = run_workspace_setup_without_venv(
             existing_env=existing_env,
             pat_validation_status="401",
         )
@@ -198,6 +205,7 @@ class WorkspaceSetupTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIsNotNone(env_text)
         self.assertIn("DATABRICKS_TOKEN=dapi-test-token", env_text)
+        self.assertEqual(env_backup_text, existing_env)
         self.assertIn(
             "the PAT in .env is invalid or expired; creating a replacement",
             result.stdout,
@@ -210,7 +218,7 @@ class WorkspaceSetupTests(unittest.TestCase):
             "DATABRICKS_TOKEN=dapi-existing-token\n"
         )
 
-        result, _, _ = run_workspace_setup_without_venv(
+        result, _, _, _ = run_workspace_setup_without_venv(
             existing_env=existing_env,
             pat_validation_status="503",
         )
@@ -225,7 +233,7 @@ class WorkspaceSetupTests(unittest.TestCase):
         self.assertNotIn("/api/2.0/preview/scim/v2/Me", script)
 
     def test_claude_code_configuration_can_be_disabled(self) -> None:
-        result, _, settings_text = run_workspace_setup_without_venv(
+        result, _, settings_text, _ = run_workspace_setup_without_venv(
             configure_claude_code="0"
         )
 
@@ -234,7 +242,7 @@ class WorkspaceSetupTests(unittest.TestCase):
         self.assertIn("CONFIGURE_CLAUDE_CODE=0", result.stdout)
 
     def test_invalid_claude_settings_report_partial_completion(self) -> None:
-        result, env_text, settings_text = run_workspace_setup_without_venv(
+        result, env_text, settings_text, _ = run_workspace_setup_without_venv(
             existing_settings="{invalid"
         )
 

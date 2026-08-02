@@ -9,7 +9,7 @@
 #   4. Serving-endpoint verification
 #   5. Model connection test through the supported OpenAI-compatible route,
 #      plus the native Anthropic Messages API for Claude
-#   6. Claude Code multi-model settings
+#   6. Claude Code settings for the verified model
 #
 # Requirements: az with the Databricks extension (logged in: `az login`), curl,
 # and Python 3.10 or newer.
@@ -32,7 +32,7 @@ FALLBACK="${FALLBACK:-databricks-meta-llama-3-3-70b-instruct}"  # proves pipelin
 PAT_LIFETIME_SECONDS="${PAT_LIFETIME_SECONDS:-7776000}"    # 90 days
 ROTATE_PAT="${ROTATE_PAT:-0}"                              # 1 creates a new PAT
 CONFIGURE_CLAUDE_CODE="${CONFIGURE_CLAUDE_CODE:-1}"        # 1 merges Claude Code settings
-CLAUDE_CODE_SCOPE="${CLAUDE_CODE_SCOPE:-user}"             # user or project
+CLAUDE_CODE_SCOPE="${CLAUDE_CODE_SCOPE:-project}"          # project or user
 PYTHON="${PYTHON:-python3}"                                 # setup-time Python
 
 # Microsoft Entra application ID for the AzureDatabricks login service (fixed value).
@@ -188,6 +188,12 @@ if [ -z "$TOKEN" ]; then
 fi
 OLD_UMASK="$(umask)"
 umask 077
+if [ -f "$ROOT/.env" ]; then
+  ENV_BACKUP="$ROOT/.env.bak.$(date -u +%Y%m%d%H%M%S)"
+  cp "$ROOT/.env" "$ENV_BACKUP"
+  chmod 600 "$ENV_BACKUP"
+  ok "existing .env backed up: $ENV_BACKUP"
+fi
 cat > "$ROOT/.env" <<EOF
 # Azure Databricks workspace URL (스킴 포함)
 DATABRICKS_HOST=$HOST
@@ -294,9 +300,12 @@ CLAUDE_SETTINGS_CONFIGURED=0
 CLAUDE_SETTINGS_FAILED=0
 if [ "$CLAUDE_CODE_READY" = "1" ] && [ "$CONFIGURE_CLAUDE_CODE" = "1" ]; then
   if DATABRICKS_HOST="$HOST" DATABRICKS_TOKEN="$TOKEN" \
-    "$PY" "$CLAUDE_CONFIGURATOR" --scope "$CLAUDE_CODE_SCOPE"; then
+    "$PY" "$CLAUDE_CONFIGURATOR" \
+      --scope "$CLAUDE_CODE_SCOPE" \
+      --model "$ENDPOINT" \
+      --project-dir "$ROOT"; then
     CLAUDE_SETTINGS_CONFIGURED=1
-    ok "Claude Code multi-model settings configured (scope: $CLAUDE_CODE_SCOPE)"
+    ok "Claude Code settings configured for verified model '$ENDPOINT' (scope: $CLAUDE_CODE_SCOPE)"
   else
     CLAUDE_SETTINGS_FAILED=1
     warn "workspace and model are ready, but Claude Code settings configuration failed"
@@ -313,7 +322,7 @@ if [ "$WORKING_ENDPOINT" = "$ENDPOINT" ]; then
   ok "OpenAI-compatible route for '$ENDPOINT' is live; .env is ready for optional samples."
   if [ "$CLAUDE_CODE_READY" = "1" ]; then
     if [ "$CLAUDE_SETTINGS_CONFIGURED" = "1" ]; then
-      ok "Claude Code is ready. Run 'claude' and select a Databricks model with /model."
+      ok "Claude Code is ready. Run 'claude' from this project."
     else
       ok "Native Anthropic route is live. Configure Claude Code with scripts/configure_claude_code.py."
     fi

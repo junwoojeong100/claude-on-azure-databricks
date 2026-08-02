@@ -1,4 +1,5 @@
 .env
+.env.bak.*
 .venv/
 .claude/settings.local.json
 .claude/settings*.json.bak.*

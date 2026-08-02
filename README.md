@@ -13,19 +13,22 @@ OpenAI Responses API를 변환합니다.
 
 ## 1. 연결 흐름 선택
 
-### 흐름 A: Azure Databricks Claude
+### Azure Databricks Claude
 
-| 단계 | 목적 | 가이드 |
+| 선택 | 목적 | 가이드 |
 | --- | --- | --- |
-| 1 | 로컬 Claude Code에서 Databricks에 직접 연결 | [Databricks 직접 연결](docs/claude-code-databricks.md) |
-| 2 | 기존 LiteLLM 서버를 통해 Claude Code를 Databricks에 연결 | [기존 LiteLLM에서 Databricks 연결](docs/existing-litellm-databricks.md) |
+| 직접 연결 | 개인 PC의 Claude Code에서 Databricks를 바로 호출 | [Databricks 직접 연결](docs/claude-code-databricks.md) |
+| 기존 gateway | 조직의 LiteLLM 서버를 통해 Databricks를 호출 | [기존 LiteLLM에서 Databricks 연결](docs/existing-litellm-databricks.md) |
 
-### 흐름 B: Microsoft Foundry GPT-5.6
+### Microsoft Foundry GPT-5.6
 
-| 단계 | 목적 | 가이드 |
+| 선택 | 목적 | 가이드 |
 | --- | --- | --- |
-| 1 | 로컬 LiteLLM을 통해 Claude Code를 Foundry GPT-5.6에 연결 | [로컬 LiteLLM에서 Foundry 연결](docs/claude-code-foundry-local.md) |
-| 2 | 기존 LiteLLM 서버를 통해 Claude Code를 Foundry GPT-5.6에 연결 | [기존 LiteLLM에서 Foundry 연결](docs/existing-litellm-foundry.md) |
+| 로컬 검증 | 개인 PC의 LiteLLM을 통해 Foundry를 호출 | [로컬 LiteLLM에서 Foundry 연결](docs/claude-code-foundry-local.md) |
+| 기존 gateway | 조직의 LiteLLM 서버를 통해 Foundry를 호출 | [기존 LiteLLM에서 Foundry 연결](docs/existing-litellm-foundry.md) |
+
+각 backend에서 필요한 선택지 하나만 실행합니다. 기존 LiteLLM 서버가 준비되어 있다면
+직접 연결이나 로컬 LiteLLM 설정을 먼저 완료할 필요가 없습니다.
 
 > Foundry GPT-5.6은 Claude Code가 OpenAI Responses API를 직접 호출할 수 없으므로
 > 로컬과 기존 서버 흐름 모두 LiteLLM의 Anthropic Messages 변환을 사용합니다.
@@ -92,23 +95,27 @@ claude --model "databricks-claude-opus-5[1m]" \
 - `Anthropic base URL`: Databricks workspace의 `/serving-endpoints/anthropic`
 - `Auth token`: `ANTHROPIC_AUTH_TOKEN`
 
-### 3. 다중 모델 설정 저장
+### 3. 검증 모델 설정 저장
 
 임시 검증이 끝난 같은 터미널에서 설정 도구를 실행합니다.
 
 ```bash
-python3 scripts/configure_claude_code.py
+python3 scripts/configure_claude_code.py \
+  --scope project \
+  --model "$DATABRICKS_MODEL"
 ```
 
 Windows PowerShell:
 
 ```powershell
-py -3 scripts\configure_claude_code.py
+$env:DATABRICKS_MODEL = 'databricks-claude-opus-5'
+py -3 scripts\configure_claude_code.py `
+  --scope project `
+  --model $env:DATABRICKS_MODEL
 ```
 
-도구는 기존 `~/.claude/settings.json`을 백업하고 관련 키만 병합합니다. 백업은 최신
-1개만 유지합니다. `/model` picker에는 Opus 5, Sonnet 5, Haiku 4.5가 표시되며
-기본 모델은 Opus 5입니다. 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
+도구는 현재 프로젝트의 `.claude/settings.local.json`을 백업하고, 앞에서 성공한 모델
+하나와 Databricks route만 병합합니다.
 
 ## 3. Databricks workspace가 없다면
 
@@ -116,8 +123,8 @@ py -3 scripts\configure_claude_code.py
 [Azure Databricks workspace 생성 가이드](docs/azure-databricks-setup.md)를 사용합니다.
 
 macOS, Linux 또는 WSL에서는 다음 스크립트가 리소스 그룹과 Premium classic workspace를
-만들고, PAT와 네이티브 Anthropic API를 검증한 뒤 Claude Code 다중 모델 설정까지
-완료합니다.
+만들고, PAT와 네이티브 Anthropic API를 검증한 뒤 성공한 모델 하나를 현재 프로젝트의
+Claude Code 설정에 저장합니다.
 
 ```bash
 git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
@@ -153,13 +160,26 @@ az account set --subscription '<name-or-id>'
 
 Claude Code 설정을 변경하지 않으려면 `CONFIGURE_CLAUDE_CODE=0`을 추가하세요.
 
+스크립트 완료 후 새 터미널에서 repository root로 이동해 최종 연결을 확인합니다.
+
+```bash
+cd /path/to/claude-on-azure-databricks
+claude -p "Reply with exactly: WORKSPACE SETUP OK" --output-format json
+```
+
+Windows PowerShell에서는 먼저
+`Set-Location C:\path\to\claude-on-azure-databricks`를 실행합니다.
+
+`is_error`가 `false`이고 `modelUsage`에 스크립트가 검증한 Databricks 모델 ID가
+표시되어야 합니다. 대화형 `/status`의 Anthropic base URL도 workspace의
+`/serving-endpoints/anthropic`이어야 합니다.
+
 ## 4. 선택 기능
 
 | 목적 | 가이드 |
 | --- | --- |
-| 단일 Databricks 모델만 유지하는 최소 설정 | [단일 모델 최소 설정](docs/claude-code-databricks.md#5-선택-단일-모델-최소-설정) |
-| PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#7-pat-대신-oauth-u2m) |
-| VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#8-vs-code-extension-사용-시) |
+| PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#6-pat-대신-oauth-u2m) |
+| VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#7-vs-code-extension-사용-시) |
 
 ## 보안과 비용
 

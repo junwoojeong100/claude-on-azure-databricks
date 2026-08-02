@@ -10,7 +10,7 @@ param(
     [bool]$RotatePat = ($env:ROTATE_PAT -eq '1'),
     [bool]$ConfigureClaudeCode = ($env:CONFIGURE_CLAUDE_CODE -ne '0'),
     [ValidateSet('user', 'project')]
-    [string]$ClaudeCodeScope = $(if ($env:CLAUDE_CODE_SCOPE) { $env:CLAUDE_CODE_SCOPE } else { 'user' })
+    [string]$ClaudeCodeScope = $(if ($env:CLAUDE_CODE_SCOPE) { $env:CLAUDE_CODE_SCOPE } else { 'project' })
 )
 
 Set-StrictMode -Version Latest
@@ -289,6 +289,13 @@ DATABRICKS_SERVING_ENDPOINT=$Endpoint
 # Fast local validation: Databricks Personal Access Token (PAT)
 DATABRICKS_TOKEN=$Token
 "@
+if (Test-Path $EnvPath) {
+    $Timestamp = [DateTime]::UtcNow.ToString('yyyyMMddHHmmss')
+    $EnvBackupPath = "$EnvPath.bak.$Timestamp"
+    Copy-Item $EnvPath $EnvBackupPath
+    Protect-File $EnvBackupPath
+    Write-Success "existing .env backed up: $EnvBackupPath"
+}
 [IO.File]::WriteAllText(
     $EnvPath,
     $EnvContent,
@@ -400,14 +407,15 @@ if ($ClaudeCodeReady -and $ConfigureClaudeCode) {
         $env:DATABRICKS_TOKEN = $Token
         $ConfiguratorArguments = @(
             $ConfiguratorPath,
-            '--scope', $ClaudeCodeScope
+            '--scope', $ClaudeCodeScope,
+            '--model', $Endpoint
         )
         if ($ClaudeCodeScope -eq 'project') {
             $ConfiguratorArguments += @('--project-dir', $RepoRoot)
         }
         Invoke-Python $Python @ConfiguratorArguments
         $ClaudeSettingsConfigured = $true
-        Write-Success "Claude Code multi-model settings configured (scope: $ClaudeCodeScope)"
+        Write-Success "Claude Code settings configured for verified model '$Endpoint' (scope: $ClaudeCodeScope)"
     } catch {
         $ClaudeSettingsFailed = $true
         Write-Warning "workspace and model are ready, but Claude Code settings configuration failed: $($_.Exception.Message)"
@@ -426,7 +434,7 @@ Write-Success "Done. Workspace: $WorkspaceUrl"
 if ($WorkingEndpoint -eq $Endpoint) {
     Write-Success "OpenAI-compatible route for '$Endpoint' is live; .env is ready."
     if ($ClaudeCodeReady -and $ClaudeSettingsConfigured) {
-        Write-Success "Claude Code is ready. Run 'claude' and select a Databricks model with /model."
+        Write-Success "Claude Code is ready. Run 'claude' from this project."
     } elseif (-not $ClaudeCodeReady) {
         Write-Warning 'Native Anthropic route is not ready; Claude Code is not ready for this model.'
     }

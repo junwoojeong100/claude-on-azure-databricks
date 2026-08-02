@@ -42,7 +42,7 @@ class ConfigureClaudeCodeTests(unittest.TestCase):
             check=False,
         )
 
-    def test_creates_multi_model_pat_settings(self) -> None:
+    def test_creates_single_verified_model_pat_settings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             settings_path = temp_path / "settings.json"
@@ -60,11 +60,13 @@ class ConfigureClaudeCodeTests(unittest.TestCase):
                 "/serving-endpoints/anthropic",
             )
             self.assertEqual(settings["env"]["ANTHROPIC_AUTH_TOKEN"], "dapi-test-token")
-            self.assertEqual(
-                settings["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"],
-                "databricks-claude-sonnet-5[1m]",
+            self.assertFalse(
+                any(
+                    key.startswith("ANTHROPIC_DEFAULT_")
+                    for key in settings["env"]
+                )
             )
-            self.assertNotIn("ANTHROPIC_DEFAULT_FABLE_MODEL", settings["env"])
+            self.assertNotIn("ANTHROPIC_CUSTOM_MODEL_OPTION", settings["env"])
             self.assertIn("WebSearch", settings["permissions"]["deny"])
             self.assertNotIn("dapi-test-token", result.stdout + result.stderr)
             if os.name != "nt":
@@ -196,6 +198,43 @@ class ConfigureClaudeCodeTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((temp_path / ".claude" / "settings.local.json").is_file())
+
+    def test_uses_explicit_verified_model(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            settings_path = temp_path / "settings.json"
+
+            result = self.run_configurator(
+                temp_path,
+                "--model",
+                "databricks-claude-haiku-4-5",
+                "--settings-path",
+                str(settings_path),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertEqual(settings["model"], "databricks-claude-haiku-4-5")
+
+    def test_adds_1m_selector_to_known_model(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            settings_path = temp_path / "settings.json"
+
+            result = self.run_configurator(
+                temp_path,
+                "--model",
+                "databricks-claude-sonnet-5",
+                "--settings-path",
+                str(settings_path),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                settings["model"],
+                "databricks-claude-sonnet-5[1m]",
+            )
 
     def test_reads_workspace_credentials_from_dotenv(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
