@@ -29,8 +29,8 @@ Claude Code
 | Claude Code 모델 이름 | `databricks-claude-*` | 같은 이름을 LiteLLM alias로 유지 |
 | LiteLLM `model_list` | Databricks Claude 항목 없음 | `databricks/<model-id>` backend 추가 |
 
-LiteLLM alias와 Claude Code의 `model` 값을 같게 유지합니다. LiteLLM에 이미 등록된
-다른 provider와 모델은 삭제하지 않습니다.
+기존 alias를 그대로 사용하면 Claude Code의 기본 모델과 `/model` picker mapping은
+변경할 필요가 없습니다. LiteLLM에 이미 등록된 다른 provider와 모델도 삭제하지 않습니다.
 
 ## 1. 현재 LiteLLM 설정 위치 확인
 
@@ -119,9 +119,19 @@ model_list:
       model: databricks/databricks-claude-opus-5
       api_base: os.environ/DATABRICKS_API_BASE
 
+  - model_name: databricks-claude-opus-4-8
+    litellm_params:
+      model: databricks/databricks-claude-opus-4-8
+      api_base: os.environ/DATABRICKS_API_BASE
+
   - model_name: databricks-claude-sonnet-5
     litellm_params:
       model: databricks/databricks-claude-sonnet-5
+      api_base: os.environ/DATABRICKS_API_BASE
+
+  - model_name: databricks-claude-sonnet-4-6
+    litellm_params:
+      model: databricks/databricks-claude-sonnet-4-6
       api_base: os.environ/DATABRICKS_API_BASE
 
   - model_name: databricks-claude-haiku-4-5
@@ -186,14 +196,13 @@ curl -sS "$LITELLM_BASE_URL/v1/messages" \
 연결된 것입니다. 모델별 virtual key 권한을 사용한다면 해당 key에 위 alias를
 허용했는지도 확인합니다.
 
-## 5. Claude Code 설정 교체
+## 5. Claude Code 설정에서 두 값만 교체
 
-기존 `~/.claude/settings.json`에서 Databricks 직접 연결 URL과 credential을 LiteLLM
-값으로 바꿉니다. 최상위 `model`은 LiteLLM에 등록한 alias와 같아야 합니다.
+기존 `~/.claude/settings.json`에서 모델 picker 관련 `ANTHROPIC_DEFAULT_*` 값은
+유지하고 다음 두 값만 바꿉니다.
 
 ```json
 {
-  "model": "databricks-claude-opus-5",
   "env": {
     "ANTHROPIC_BASE_URL": "https://<litellm-host>",
     "ANTHROPIC_AUTH_TOKEN": "<litellm-virtual-key>",

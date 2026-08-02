@@ -35,8 +35,10 @@ cross-Geo 대상으로 표시되지만 Sonnet 5는 현재 리전 표에 없습�
 [cross-Geo 처리 설정](https://learn.microsoft.com/azure/databricks/resources/databricks-geos#cross-geo-processing)과
 조직의 데이터 레지던시 요구사항을 먼저 확인해야 합니다.
 
-스크립트는 smoke test에 성공한 모델 하나만 Claude Code 설정에 저장합니다. 검증하지
-않은 모델을 picker에 추가하지 않습니다.
+이 스크립트의 smoke test 모델과 Claude Code의 `/model` picker 구성은 서로 독립적입니다.
+Smoke test는 모델 하나로 연결을 확인하고, 성공하면
+[Claude Code 연결 가이드](claude-code-databricks.md#4-다중-모델-영구-설정)의 기본
+다중 모델 구성을 적용합니다. Workspace에서 호출할 수 없는 모델은 설정에서 제거하세요.
 
 ## 1. 자동 생성
 
@@ -97,7 +99,7 @@ PowerShell에서는 `-ResourceGroup`, `-Location`, `-Workspace` 같은 parameter
 | `WORKSPACE` | `ws-databricks-claude` | Databricks workspace |
 | `SKU` | `premium` | Workspace SKU |
 | `DATABRICKS_SERVING_ENDPOINT` | `databricks-claude-opus-5` | 검증할 기본 Claude 모델 |
-| `CONFIGURE_CLAUDE_CODE` | `1` | 성공 시 검증한 모델의 Claude Code 설정 병합 |
+| `CONFIGURE_CLAUDE_CODE` | `1` | 성공 시 Claude Code 다중 모델 설정 병합 |
 | `CLAUDE_CODE_SCOPE` | `project` | `project` 또는 `user` 설정 범위 |
 
 스크립트는 다음 작업을 수행합니다.
@@ -106,7 +108,7 @@ PowerShell에서는 `-ResourceGroup`, `-Location`, `-Workspace` 같은 parameter
 2. Azure 로그인으로 로컬 검증용 PAT 생성 또는 기존 유효 PAT 재사용
 3. 기존 `.env`가 있으면 백업하고 프로젝트 루트에 새 `.env` 작성
 4. 설정한 Claude 모델의 OpenAI 호환 API와 네이티브 Anthropic API smoke test
-5. 검증한 모델 하나를 Claude Code 설정에 병합
+5. 기존 설정을 백업하고 Claude Code 다중 모델 설정 병합
 
 OpenAI 호환 경로만 성공하고 네이티브 Anthropic 경로가 실패하면 Claude Code 설정은
 변경하지 않습니다.
@@ -152,7 +154,7 @@ claude -p "Reply with exactly: WORKSPACE SETUP OK" --output-format json
 Windows PowerShell에서는 먼저
 `Set-Location C:\path\to\claude-on-azure-databricks`를 실행합니다.
 
-`is_error`가 `false`이고 `modelUsage`에 검증한 Databricks 모델 ID가 표시되어야 합니다.
+`is_error`가 `false`이고 `modelUsage`에 기본 Databricks 모델 ID가 표시되어야 합니다.
 대화형 `/status`에서는 Anthropic base URL이 workspace의
 `/serving-endpoints/anthropic`인지 확인합니다.
 
@@ -225,8 +227,8 @@ Workspace 생성만으로 모든 Claude 모델을 호출할 수 있는 것은 �
 
 Workspace URL, 호출 가능한 Claude 모델 ID, token을 준비한 뒤
 [기존 workspace에 Claude Code 연결하기](claude-code-databricks.md)를 따릅니다.
-프로젝트 루트의 `.env`가 준비되어 있다면 다음 명령으로 `.env`에 지정된 모델 하나를
-현재 프로젝트 설정에 바로 병합할 수 있습니다.
+프로젝트 루트의 `.env`가 준비되어 있다면 다음 명령으로 다중 모델 설정을 현재
+프로젝트에 바로 병합할 수 있습니다.
 
 ```bash
 python3 scripts/configure_claude_code.py --scope project

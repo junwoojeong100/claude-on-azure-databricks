@@ -2,7 +2,7 @@
 
 Azure Databricks workspace에서 Anthropic Claude 모델을 호출할 수 있다면 Claude Code를
 Databricks의 네이티브 Anthropic Messages API에 직접 연결할 수 있습니다.
-검증 후 기존 gateway로 중앙화하려면
+이 문서는 Databricks 흐름의 1단계입니다. 검증 후 기존 gateway로 중앙화하려면
 [기존 LiteLLM 서버 Databricks 연결 가이드](existing-litellm-databricks.md)로
 진행합니다.
 
@@ -15,10 +15,10 @@ Claude Code
 
 1. Databricks API를 직접 호출해 URL, credential, 모델 ID 검증
 2. 같은 값을 임시 환경변수로 Claude Code에서 검증
-3. 검증한 모델 하나를 프로젝트 설정에 저장
+3. Opus·Sonnet·Haiku 다중 모델 설정을 파일에 저장
 4. 필요한 경우 OAuth 자동 갱신 또는 단일 모델 최소 설정으로 조정
 
-> 공식 문서 확인: 2026-08-02. Opus 5는 Claude Code 2.1.219 이상, Sonnet 5는
+> 공식 문서 확인: 2026-07-27. Opus 5는 Claude Code 2.1.219 이상, Sonnet 5는
 > 2.1.197 이상이 필요합니다.
 
 ## 1. 준비 사항
@@ -151,37 +151,132 @@ claude
 다른 provider나 claude.ai login이 사용된다면 `/logout`을 실행하거나 터미널의
 `ANTHROPIC_*`, `CLAUDE_CODE_USE_*` 환경변수 충돌을 제거하세요.
 
-## 4. 검증한 모델 영구 설정
+## 4. 다중 모델 영구 설정
 
 임시 검증이 성공한 같은 터미널에서 리포의 설정 도구를 실행합니다.
 
 macOS, Linux, WSL:
 
 ```bash
-python3 scripts/configure_claude_code.py \
-  --scope project \
-  --model "$DATABRICKS_MODEL"
+python3 scripts/configure_claude_code.py
 ```
 
 Windows PowerShell:
 
 ```powershell
-py -3 scripts\configure_claude_code.py `
-  --scope project `
-  --model $env:DATABRICKS_MODEL
+py -3 scripts\configure_claude_code.py
 ```
 
 도구는 앞 단계의 `ANTHROPIC_BASE_URL`과 `ANTHROPIC_AUTH_TOKEN`을 읽고 다음 작업을
 수행합니다.
 
-1. 기존 `.claude/settings.local.json`을 `.bak.<timestamp>`로 백업하고 최신 1개만 유지
-2. unrelated settings를 유지하면서 Databricks routing과 검증한 모델 하나를 병합
-3. 충돌하는 provider routing 키와 이전 버전의 picker mapping 제거
+1. 기존 `~/.claude/settings.json`을 `.bak.<timestamp>`로 백업하고 최신 1개만 유지
+2. unrelated settings를 유지하면서 Databricks routing과 picker 키만 병합
+3. 충돌하는 provider routing 키 제거
 4. macOS/Linux/WSL은 `0600`, Windows는 `icacls`로 현재 사용자만 수정하도록 제한
 
-`--scope project`는 현재 repository의 `.claude/settings.local.json`에 저장하므로
-다른 프로젝트의 Claude Code route를 바꾸지 않습니다. 모든 프로젝트에 같은 route를
-사용해야 할 때만 `--scope user`를 선택하세요.
+현재 프로젝트에만 적용하려면 `--scope project`를 추가합니다. 이 경우
+`.claude/settings.local.json`에 저장됩니다.
+
+도구가 생성하는 기본 설정은 `/model` picker에 최신 Opus와 Sonnet 각 2개, Haiku 1개를
+처음부터 표시합니다.
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "WebSearch"
+    ]
+  },
+  "model": "databricks-claude-opus-5[1m]",
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://<workspace-host>/serving-endpoints/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "<databricks-token>",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-5[1m]",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus 5 (1M context)",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-4-8[1m]",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 4.8 (1M context)",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "databricks-claude-sonnet-5[1m]",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5 (1M context)",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Custom Sonnet model (1M context)",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-4-6[1m]",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Sonnet 4.6 (1M context)",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Custom Sonnet model (1M context)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-4-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku 4.5 (200K context)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Custom Haiku model (200K context)",
+    "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
+  }
+}
+```
+
+Claude Code가 이름을 지정할 수 있는 custom picker 항목은 하나입니다. 따라서 이 구성은
+`fable` picker 자리를 Opus 4.8에 사용하고, custom option을 Sonnet 4.6에 사용합니다.
+`/model fable`을 입력하면 실제 Fable 5가 아니라 Opus 4.8이 선택됩니다.
+
+| Picker 모델 | Claude Code 선택값 | Databricks 모델 ID | `contextWindow` |
+| --- | --- | --- | --- |
+| `Opus 5 (1M context)` | `opus` | `databricks-claude-opus-5` | 1,000,000 |
+| `Opus 4.8 (1M context)` | `fable` | `databricks-claude-opus-4-8` | 1,000,000 |
+| `Sonnet 5 (1M context)` | `sonnet` | `databricks-claude-sonnet-5` | 1,000,000 |
+| `Sonnet 4.6 (1M context)` | custom option | `databricks-claude-sonnet-4-6` | 1,000,000 |
+| `Haiku 4.5 (200K context)` | `haiku` | `databricks-claude-haiku-4-5` | 200,000 |
+
+Workspace에서 일부 모델만 호출할 수 있다면 해당 `ANTHROPIC_DEFAULT_*` 또는
+`ANTHROPIC_CUSTOM_MODEL_OPTION*` 항목만 제거하세요. 다른 사용자의 설정에는 영향을 주지
+않습니다.
+
+Claude Code를 완전히 종료한 뒤 다시 시작해야 picker 항목이 갱신됩니다. JSON을
+수동으로 관리하려면 기존 파일 전체를 덮어쓰지 말고 위 키만 병합하세요.
+
+설정 후 다섯 모델을 한 번에 확인합니다.
+
+```bash
+models=(
+  "databricks-claude-opus-5[1m]"
+  "databricks-claude-opus-4-8[1m]"
+  "databricks-claude-sonnet-5[1m]"
+  "databricks-claude-sonnet-4-6[1m]"
+  "databricks-claude-haiku-4-5"
+)
+
+for model in "${models[@]}"; do
+  claude --model "$model" \
+    -p "Reply with exactly: ${model} OK" \
+    --output-format json
+done
+```
+
+Windows PowerShell:
+
+```powershell
+$models = @(
+  'databricks-claude-opus-5[1m]'
+  'databricks-claude-opus-4-8[1m]'
+  'databricks-claude-sonnet-5[1m]'
+  'databricks-claude-sonnet-4-6[1m]'
+  'databricks-claude-haiku-4-5'
+)
+
+$models | ForEach-Object {
+  claude --model $_ `
+    -p "Reply with exactly: $_ OK" `
+    --output-format json
+}
+```
+
+다섯 응답 모두 `is_error`가 `false`여야 합니다. `modelUsage`에는 선택한 모델에 대응하는
+`databricks-claude-*` ID가 표시됩니다.
+
+> **완료 기준:** 새 Claude Code session의 `/status`에 Databricks Anthropic base URL이
+> 표시되고, 등록한 모델의 테스트 응답이 모두 성공합니다.
+
+## 5. 선택: 단일 모델 최소 설정
+
+특정 모델만 허용하거나 picker mapping이 필요하지 않은 환경에서는 다음 최소 설정을
+사용할 수 있습니다.
 
 ```json
 {
@@ -199,29 +294,7 @@ py -3 scripts\configure_claude_code.py `
 }
 ```
 
-`permissions.deny`의 `WebSearch`는 Databricks Anthropic route가 Claude Code의
-`web_search_*` tool을 거부하는 오류를 피하기 위한 설정입니다. 기존 deny 항목은
-유지됩니다.
-
-Claude Code를 완전히 종료한 뒤 다시 시작하고 저장한 모델을 확인합니다.
-
-```bash
-claude -p "Reply with exactly: SAVED MODEL OK" --output-format json
-```
-
-Windows PowerShell:
-
-```powershell
-claude -p 'Reply with exactly: SAVED MODEL OK' --output-format json
-```
-
-`is_error`가 `false`여야 하고 `modelUsage`에는 검증한 `databricks-claude-*` ID가
-표시되어야 합니다.
-
-> **완료 기준:** 새 Claude Code session의 `/status`에 Databricks Anthropic base URL이
-> 표시되고, 저장한 모델의 테스트 응답이 성공합니다.
-
-## 5. Context window과 요청 한도
+## 6. Context window과 요청 한도
 
 `[1m]`은 custom `ANTHROPIC_BASE_URL` 뒤에서 Claude Code가 1M context를 관리하도록 하는
 selector입니다. Claude Code는 selector를 제거한 Databricks 모델 ID를 API에 전송합니다.
@@ -229,17 +302,21 @@ selector입니다. Claude Code는 selector를 제거한 Databricks 모델 ID를 
 | Databricks 모델 | 모델 context window |
 | --- | --- |
 | `databricks-claude-opus-5` | 1M tokens |
+| `databricks-claude-opus-4-8` | 1M tokens |
+| `databricks-claude-opus-4-7` | 1M tokens |
+| `databricks-claude-opus-4-6` | 1M tokens |
+| `databricks-claude-opus-4-5` | 200K tokens |
 | `databricks-claude-sonnet-5` | 1M tokens |
+| `databricks-claude-sonnet-4-6` | 1M tokens |
+| `databricks-claude-sonnet-4-5` | 200K tokens |
 | `databricks-claude-haiku-4-5` | 200K tokens |
-
-다른 모델을 사용하려면 공식 지원 모델 표에서 해당 모델의 context window를 확인하세요.
 
 모델 context window와 Azure Databricks workspace 요청 한도는 별개입니다. 공식
 Enterprise-tier pay-per-token 표의 Claude 한도는 ITPM 200K, OTPM 20K이고 payload
 제한은 4MB입니다. 따라서 1M-token 입력을 한 요청에서 모두 사용할 수 있다고 가정하면
 안 됩니다.
 
-## 6. PAT 대신 OAuth U2M
+## 7. PAT 대신 OAuth U2M
 
 Databricks OAuth U2M은 access token을 자동으로 갱신할 수 있습니다. 이 리포는
 Databricks CLI의 token cache를 Claude Code `apiKeyHelper`와 연결하는 helper를
@@ -259,32 +336,24 @@ databricks auth login \
 
 브라우저 로그인을 마치면 `claude-code` profile에 OAuth U2M 인증 정보가 저장됩니다.
 
-### 2. OAuth 모델 설정
+### 2. OAuth 다중 모델 설정
 
 macOS, Linux, WSL:
 
 ```bash
 export DATABRICKS_HOST="https://<workspace-host>"
-export DATABRICKS_MODEL="databricks-claude-opus-5"
-python3 scripts/configure_claude_code.py \
-  --auth oauth \
-  --scope project \
-  --model "$DATABRICKS_MODEL"
+python3 scripts/configure_claude_code.py --auth oauth
 ```
 
 Windows PowerShell:
 
 ```powershell
 $env:DATABRICKS_HOST = 'https://<workspace-host>'
-$env:DATABRICKS_MODEL = 'databricks-claude-opus-5'
-py -3 scripts\configure_claude_code.py `
-  --auth oauth `
-  --scope project `
-  --model $env:DATABRICKS_MODEL
+py -3 scripts\configure_claude_code.py --auth oauth
 ```
 
 설정 도구는 기존 파일을 백업하고 PAT를 제거한 뒤 OS에 맞는 `apiKeyHelper`,
-`DATABRICKS_CONFIG_PROFILE=claude-code`, 지정한 모델을 병합합니다.
+`DATABRICKS_CONFIG_PROFILE=claude-code`, 다중 모델 picker를 병합합니다.
 
 ### 3. Helper 직접 확인
 
@@ -310,7 +379,7 @@ $env:DATABRICKS_CONFIG_PROFILE = 'claude-code'
 조직의 credential provider나 vault에서 access token을 반환하는 별도 `apiKeyHelper`와
 연동해야 합니다.
 
-## 7. VS Code extension 사용 시
+## 8. VS Code extension 사용 시
 
 이 문서의 기본 경로는 Claude Code CLI입니다. VS Code extension은 자체 로그인 확인 전에
 credential을 읽어야 하므로 VS Code 사용자 settings의 `claudeCode.environmentVariables`에도

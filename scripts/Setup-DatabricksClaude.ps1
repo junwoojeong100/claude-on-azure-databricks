@@ -407,15 +407,14 @@ if ($ClaudeCodeReady -and $ConfigureClaudeCode) {
         $env:DATABRICKS_TOKEN = $Token
         $ConfiguratorArguments = @(
             $ConfiguratorPath,
-            '--scope', $ClaudeCodeScope,
-            '--model', $Endpoint
+            '--scope', $ClaudeCodeScope
         )
         if ($ClaudeCodeScope -eq 'project') {
             $ConfiguratorArguments += @('--project-dir', $RepoRoot)
         }
         Invoke-Python $Python @ConfiguratorArguments
         $ClaudeSettingsConfigured = $true
-        Write-Success "Claude Code settings configured for verified model '$Endpoint' (scope: $ClaudeCodeScope)"
+        Write-Success "Claude Code multi-model settings configured (scope: $ClaudeCodeScope)"
     } catch {
         $ClaudeSettingsFailed = $true
         Write-Warning "workspace and model are ready, but Claude Code settings configuration failed: $($_.Exception.Message)"
@@ -434,7 +433,7 @@ Write-Success "Done. Workspace: $WorkspaceUrl"
 if ($WorkingEndpoint -eq $Endpoint) {
     Write-Success "OpenAI-compatible route for '$Endpoint' is live; .env is ready."
     if ($ClaudeCodeReady -and $ClaudeSettingsConfigured) {
-        Write-Success "Claude Code is ready. Run 'claude' from this project."
+        Write-Success "Claude Code is ready. Run 'claude' and select a Databricks model with /model."
     } elseif (-not $ClaudeCodeReady) {
         Write-Warning 'Native Anthropic route is not ready; Claude Code is not ready for this model.'
     }

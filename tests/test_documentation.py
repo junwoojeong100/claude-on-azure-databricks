@@ -88,7 +88,7 @@ class DocumentationTests(unittest.TestCase):
         )
         self.assertLess(
             readme.index("### 2. Claude Code에서 확인"),
-            readme.index("### 3. 검증 모델 설정 저장"),
+            readme.index("### 3. 다중 모델 설정 저장"),
         )
         self.assertIn("scripts/configure_claude_code.py", readme)
 
@@ -197,11 +197,26 @@ class DocumentationTests(unittest.TestCase):
             "Get-DatabricksOAuthToken.ps1",
             "claudeCode.environmentVariables",
             "/status",
-            "--model",
             "--scope project",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL",
+            "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL",
+            "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+            "ANTHROPIC_CUSTOM_MODEL_OPTION",
+            "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+            "Opus 5 (1M context)",
+            "Opus 4.8 (1M context)",
+            "Sonnet 5 (1M context)",
+            "Sonnet 4.6 (1M context)",
+            "Haiku 4.5 (200K context)",
             "## 2. Databricks API부터 검증",
-            "## 4. 검증한 모델 영구 설정",
-            "## 5. Context window과 요청 한도",
+            "## 4. 다중 모델 영구 설정",
+            "## 5. 선택: 단일 모델 최소 설정",
         ):
             self.assertIn(required_text, guide)
 
@@ -214,12 +229,35 @@ class DocumentationTests(unittest.TestCase):
             value
             for value in json_settings
             if value.get("model") == "databricks-claude-opus-5[1m]"
+            and "ANTHROPIC_DEFAULT_OPUS_MODEL" in value.get("env", {})
         )
         self.assertNotIn("availableModels", settings)
         self.assertNotIn("enforceAvailableModels", settings)
         self.assertNotIn("modelOverrides", settings)
         self.assertEqual(
-            set(settings["env"]),
+            settings["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"],
+            "databricks-claude-opus-5[1m]",
+        )
+        self.assertEqual(
+            settings["env"]["ANTHROPIC_DEFAULT_FABLE_MODEL"],
+            "databricks-claude-opus-4-8[1m]",
+        )
+        self.assertEqual(
+            settings["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"],
+            "databricks-claude-sonnet-5[1m]",
+        )
+        self.assertEqual(
+            settings["env"]["ANTHROPIC_CUSTOM_MODEL_OPTION"],
+            "databricks-claude-sonnet-4-6[1m]",
+        )
+        minimal_settings = next(
+            value
+            for value in json_settings
+            if value.get("model") == "databricks-claude-opus-5[1m]"
+            and "ANTHROPIC_DEFAULT_OPUS_MODEL" not in value.get("env", {})
+        )
+        self.assertEqual(
+            set(minimal_settings["env"]),
             {
                 "ANTHROPIC_BASE_URL",
                 "ANTHROPIC_AUTH_TOKEN",
@@ -234,9 +272,9 @@ class DocumentationTests(unittest.TestCase):
 
         api_heading = "## 2. Databricks API부터 검증"
         cli_heading = "## 3. Claude Code에서 임시 검증"
-        settings_heading = "## 4. 검증한 모델 영구 설정"
-        oauth_heading = "## 6. PAT 대신 OAuth U2M"
-        vscode_heading = "## 7. VS Code extension 사용 시"
+        settings_heading = "## 4. 다중 모델 영구 설정"
+        oauth_heading = "## 7. PAT 대신 OAuth U2M"
+        vscode_heading = "## 8. VS Code extension 사용 시"
         troubleshooting_heading = "## 문제 해결"
 
         self.assertLess(guide.index(api_heading), guide.index(cli_heading))
@@ -245,7 +283,10 @@ class DocumentationTests(unittest.TestCase):
         self.assertLess(
             guide.index(vscode_heading), guide.index(troubleshooting_heading)
         )
-        self.assertIn("--model", guide)
+        self.assertLess(
+            guide.index("scripts/configure_claude_code.py"),
+            guide.index('"ANTHROPIC_DEFAULT_OPUS_MODEL"'),
+        )
 
     def test_default_model_is_opus_5_across_guides_and_setup(self) -> None:
         paths = (
@@ -278,7 +319,7 @@ class DocumentationTests(unittest.TestCase):
             "Protect-File",
             "configure_claude_code.py",
             "'project'",
-            "'--model', $Endpoint",
+            "multi-model settings configured",
             "Claude Code is ready",
         ):
             self.assertIn(required_text, script)
@@ -352,6 +393,9 @@ class DocumentationTests(unittest.TestCase):
             "azure/responses/<sol-deployment-name>",
             "ANTHROPIC_BASE_URL",
             "secrets.token_urlsafe(32)",
+            "foundry-gpt-5.6-terra",
+            "foundry-gpt-5.6-luna",
+            "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
             "claude --model",
             "existing-litellm-foundry.md",
         ):
