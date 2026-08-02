@@ -302,10 +302,9 @@ if [ "$CLAUDE_CODE_READY" = "1" ] && [ "$CONFIGURE_CLAUDE_CODE" = "1" ]; then
   if DATABRICKS_HOST="$HOST" DATABRICKS_TOKEN="$TOKEN" \
     "$PY" "$CLAUDE_CONFIGURATOR" \
       --scope "$CLAUDE_CODE_SCOPE" \
-      --model "$ENDPOINT" \
       --project-dir "$ROOT"; then
     CLAUDE_SETTINGS_CONFIGURED=1
-    ok "Claude Code settings configured for verified model '$ENDPOINT' (scope: $CLAUDE_CODE_SCOPE)"
+    ok "Claude Code multi-model settings configured (scope: $CLAUDE_CODE_SCOPE)"
   else
     CLAUDE_SETTINGS_FAILED=1
     warn "workspace and model are ready, but Claude Code settings configuration failed"
@@ -322,7 +321,7 @@ if [ "$WORKING_ENDPOINT" = "$ENDPOINT" ]; then
   ok "OpenAI-compatible route for '$ENDPOINT' is live; .env is ready for optional samples."
   if [ "$CLAUDE_CODE_READY" = "1" ]; then
     if [ "$CLAUDE_SETTINGS_CONFIGURED" = "1" ]; then
-      ok "Claude Code is ready. Run 'claude' from this project."
+      ok "Claude Code is ready. Run 'claude' and select a Databricks model with /model."
     else
       ok "Native Anthropic route is live. Configure Claude Code with scripts/configure_claude_code.py."
     fi

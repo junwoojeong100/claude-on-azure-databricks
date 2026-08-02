@@ -316,12 +316,14 @@ Anthropic-to-Responses 변환 호환성을 먼저 확인합니다. LiteLLM 버�
 ```
 
 이 리포의 `scripts/configure_claude_code.py`는 Databricks workspace URL, credential과
-지정한 `databricks-claude-*` 모델을 다시 저장하므로 위 설정 후 실행하지 않습니다.
+`databricks-claude-*` 기본 모델을 다시 저장하므로 위 설정 후 실행하지 않습니다.
 기존에 이 스크립트로 설정했다면 다음 기준으로 정리합니다.
 
+- 같은 LiteLLM에 [Databricks alias](existing-litellm-databricks.md)도 등록되어 있고 virtual
+  key가 접근할 수 있으면 기존 `ANTHROPIC_DEFAULT_*` picker 값은 유지할 수 있습니다.
 - Foundry 모델만 제공하는 LiteLLM이면 기존 `databricks-claude-*`를 가리키는 최상위
-  `model`과 `ANTHROPIC_DEFAULT_*` 값을 제거하고 위처럼 `model`을
-  `foundry-gpt-5.6-sol`로 지정합니다.
+  `model`, `ANTHROPIC_DEFAULT_*`, `ANTHROPIC_CUSTOM_MODEL_OPTION*` 값을 제거하고 위처럼
+  `model`을 `foundry-gpt-5.6-sol`로 지정합니다.
 
 Claude Code 2.1.129 이상은 LiteLLM의 `GET /v1/models`를 호출하고 virtual key가 접근할
 수 있는 모델을 `/model` picker의 **From gateway**에 표시합니다. Alias가 보이지 않으면
@@ -376,7 +378,7 @@ Admin UI의 **Reload Model Cost Map** 또는 기존 운영 절차의
 | 기존 keyless Azure 모델 인증이 바뀜 | 전역 `AZURE_CLIENT_ID`, token refresh, identity와 scope |
 | GPT-5.6 deployment 생성 실패 | 리전 가용성, subscription quota tier와 quota request |
 | `/model`에 alias가 없음 | Gateway discovery, Claude Code 버전, virtual key 모델 권한 |
-| 시작 시 Databricks model not found | repo script가 저장한 기존 `model` 값 |
+| 시작 시 Databricks model not found | repo script가 저장한 `model` 또는 `ANTHROPIC_DEFAULT_*` 값 |
 | 비용이 unknown으로 표시됨 | `model_info.base_model`, cost map, pricing override |
 
 ## 공식 문서

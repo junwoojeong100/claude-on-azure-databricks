@@ -95,27 +95,23 @@ claude --model "databricks-claude-opus-5[1m]" \
 - `Anthropic base URL`: Databricks workspace의 `/serving-endpoints/anthropic`
 - `Auth token`: `ANTHROPIC_AUTH_TOKEN`
 
-### 3. 검증 모델 설정 저장
+### 3. 다중 모델 설정 저장
 
 임시 검증이 끝난 같은 터미널에서 설정 도구를 실행합니다.
 
 ```bash
-python3 scripts/configure_claude_code.py \
-  --scope project \
-  --model "$DATABRICKS_MODEL"
+python3 scripts/configure_claude_code.py
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:DATABRICKS_MODEL = 'databricks-claude-opus-5'
-py -3 scripts\configure_claude_code.py `
-  --scope project `
-  --model $env:DATABRICKS_MODEL
+py -3 scripts\configure_claude_code.py
 ```
 
-도구는 현재 프로젝트의 `.claude/settings.local.json`을 백업하고, 앞에서 성공한 모델
-하나와 Databricks route만 병합합니다.
+도구는 기존 `~/.claude/settings.json`을 백업하고 관련 키만 병합합니다. 백업은 최신
+1개만 유지합니다. `/model` picker에는 Opus·Sonnet 각 2개와 Haiku 1개가 표시되며
+기본 모델은 Opus 5입니다. 현재 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
 
 ## 3. Databricks workspace가 없다면
 
@@ -123,8 +119,8 @@ py -3 scripts\configure_claude_code.py `
 [Azure Databricks workspace 생성 가이드](docs/azure-databricks-setup.md)를 사용합니다.
 
 macOS, Linux 또는 WSL에서는 다음 스크립트가 리소스 그룹과 Premium classic workspace를
-만들고, PAT와 네이티브 Anthropic API를 검증한 뒤 성공한 모델 하나를 현재 프로젝트의
-Claude Code 설정에 저장합니다.
+만들고, PAT와 네이티브 Anthropic API를 검증한 뒤 현재 프로젝트에 Claude Code 다중
+모델 설정을 저장합니다.
 
 ```bash
 git clone https://github.com/junwoojeong100/claude-on-azure-databricks.git
@@ -178,8 +174,9 @@ Windows PowerShell에서는 먼저
 
 | 목적 | 가이드 |
 | --- | --- |
-| PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#6-pat-대신-oauth-u2m) |
-| VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#7-vs-code-extension-사용-시) |
+| 단일 Databricks 모델만 유지하는 최소 설정 | [단일 모델 최소 설정](docs/claude-code-databricks.md#5-선택-단일-모델-최소-설정) |
+| PAT를 저장하지 않고 OAuth U2M token 자동 갱신 | [OAuth `apiKeyHelper`](docs/claude-code-databricks.md#7-pat-대신-oauth-u2m) |
+| VS Code extension에서 Databricks routing 사용 | [VS Code extension 설정](docs/claude-code-databricks.md#8-vs-code-extension-사용-시) |
 
 ## 보안과 비용
 
