@@ -19,6 +19,7 @@ OpenAI Responses API를 변환합니다.
 | --- | --- | --- |
 | 직접 연결 | 개인 PC의 Claude Code에서 Databricks를 바로 호출 | [Databricks 직접 연결](docs/claude-code-databricks.md) |
 | 기존 gateway | 조직의 LiteLLM 서버를 통해 Databricks를 호출 | [기존 LiteLLM에서 Databricks 연결](docs/existing-litellm-databricks.md) |
+| 기능 검토 | Databricks 연결 시 유지되거나 제한되는 Claude Code 기능 확인 | [Claude Code 기능 커버리지](docs/claude-code-databricks-feature-coverage.md) |
 
 ### Microsoft Foundry GPT-5.6
 
