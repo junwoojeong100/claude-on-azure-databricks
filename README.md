@@ -12,10 +12,14 @@ OpenAI Responses API를 변환합니다.
 > 문서를 다시 확인하세요.
 
 > **화면 캡처·영상으로 따라 하기** — 실제 Azure에서 실행한 기록으로 만든 1페이지 HTML
-> 실습 가이드입니다. 노트북과 Databricks 사이에 LiteLLM이 없는 경우는
-> [직접 연결](docs/guide/databricks-direct.html), 있는 경우는
-> [LiteLLM 경유](docs/guide/databricks-litellm.html)를 따라 하세요. GitHub 웹에서는
-> HTML이 렌더링되지 않으므로 저장소를 clone한 뒤 브라우저로 여세요.
+> 실습 가이드입니다. 브라우저에서 바로 열 수 있습니다:
+> [가이드 목록](https://junwoojeong100.github.io/claude-on-azure-databricks/).
+> 노트북과 Databricks 사이에 LiteLLM이 없는 경우는
+> [직접 연결](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-direct.html),
+> 있는 경우는
+> [LiteLLM 경유](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-litellm.html)를
+> 따라 하세요. 원본은 [`docs/guide/`](docs/guide/)이며, `main`에 push하면 GitHub Pages가
+> 자동으로 다시 배포합니다.
 
 ## 1. 연결 흐름 선택
 

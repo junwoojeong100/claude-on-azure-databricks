@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Code → LiteLLM → Azure Databricks 연결 실습</title>
 <meta name="description" content="중간에 LiteLLM 게이트웨이를 두면 Databricks credential은 서버에만 남고, 노트북에는 LiteLLM key만 있으면 됩니다. 값 두 개만 바꿔 연결합니다.">
+<meta name="theme-color" content="#0f1a38">
+<meta property="og:type" content="article">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="Claude Code × Azure Databricks 실습 가이드">
+<meta property="og:title" content="Claude Code → LiteLLM → Azure Databricks 연결 실습">
+<meta property="og:description" content="중간에 LiteLLM 게이트웨이를 두면 Databricks credential은 서버에만 남고, 노트북에는 LiteLLM key만 있으면 됩니다. 값 두 개만 바꿔 연결합니다.">
+<meta property="og:image" content="https://junwoojeong100.github.io/claude-on-azure-databricks/assets/img/og-litellm.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%AA%3C/text%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#f5f7fb; --panel:#ffffff; --text:#172033; --muted:#566079; --line:#e2e7f0; --soft:#f0f3fa;
@@ -101,6 +112,8 @@ details.more>summary{cursor:pointer;padding:13px 16px;font-weight:700;list-style
 details.more>summary::before{content:"▸";transition:transform .15s;color:var(--muted)} details.more[open]>summary::before{transform:rotate(90deg)}
 details.more>summary::-webkit-details-marker{display:none} .more-body{padding:0 18px 14px}
 .flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.crumb{display:block;width:fit-content;margin:0 0 12px;color:#cfdcff;font-size:13.5px;text-decoration:none}
+.crumb:hover{text-decoration:underline;color:#fff}
 .foot{max-width:1240px;margin:0 auto;padding:0 24px 60px;color:var(--muted);font-size:14px}
 .foot .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px 26px;box-shadow:var(--shadow)}
 .foot h3{margin:0 0 8px;color:var(--text);font-size:17px} .foot ul{margin:6px 0 14px;padding-left:1.2em}
@@ -126,6 +139,7 @@ details.more>summary::-webkit-details-marker{display:none} .more-body{padding:0 
 <a class="skip" href="#main">본문으로 건너뛰기</a>
 <div class="progress" aria-hidden="true"></div>
 <header class="hero"><div class="hero-in">
+  <a class="crumb" href="index.html">← 실습 가이드 목록</a>
   <span class="eyebrow">LiteLLM 경유 · 게이트웨이</span>
   <h1>Claude Code → <span style='color:#ffd36b'>LiteLLM</span> → Azure Databricks</h1>
   <p class="sub">중간에 LiteLLM 게이트웨이를 두면 Databricks credential은 서버에만 남고, 노트북에는 LiteLLM key만 있으면 됩니다. 값 두 개만 바꿔 연결합니다.</p>
@@ -267,10 +281,10 @@ az group delete --name "$RG" --yes --no-wait      # 실습용 resource group (wo
   <div class="table-wrap"><table class=""><thead><tr><th>항목</th><th>실습 환경</th></tr></thead><tbody><tr><td>실행일</td><td>2026-11-24</td></tr><tr><td>LiteLLM</td><td><code>ghcr.io/berriai/litellm:main-stable</code> (1.110.3) · Docker 29.5 (Colima)</td></tr><tr><td>Claude Code</td><td>2.1.331</td></tr><tr><td>Azure Databricks</td><td>Premium workspace · <code>eastus2</code></td></tr><tr><td>호출 확인</td><td>5개 모델 모두 LiteLLM 경유 성공</td></tr></tbody></table></div>
   <h3>원문 문서</h3>
   <ul>
-    <li><a href="../existing-litellm-databricks.md">기존 LiteLLM을 통해 Claude Code를 Azure Databricks에 연결하기</a> · <a href="../claude-code-databricks.md">직접 연결</a></li>
+    <li><a href="https://github.com/junwoojeong100/claude-on-azure-databricks/blob/main/docs/existing-litellm-databricks.md" target="_blank" rel="noopener">기존 LiteLLM을 통해 Claude Code를 Azure Databricks에 연결하기</a> · <a href="https://github.com/junwoojeong100/claude-on-azure-databricks/blob/main/docs/claude-code-databricks.md" target="_blank" rel="noopener">직접 연결</a></li>
     <li><a href="https://docs.litellm.ai/docs/providers/databricks">LiteLLM Databricks provider</a> · <a href="https://docs.litellm.ai/docs/proxy/configs">LiteLLM proxy configuration</a> · <a href="https://code.claude.com/docs/en/llm-gateway-connect">Claude Code LLM gateway 연결</a> · <a href="https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m">Databricks OAuth M2M</a></li>
   </ul>
-  <div class="next"><a class="btn ghost" href="databricks-direct.html">◂ LiteLLM 없이 직접 연결</a><a class="btn ghost" href="../../README.md">README</a></div>
+  <div class="next"><a class="btn ghost" href="databricks-direct.html">◂ LiteLLM 없이 직접 연결</a><a class="btn ghost" href="index.html">가이드 목록</a><a class="btn ghost" href="https://github.com/junwoojeong100/claude-on-azure-databricks" target="_blank" rel="noopener">GitHub 리포 ↗</a></div>
 </div>
 </footer>
 <script>
