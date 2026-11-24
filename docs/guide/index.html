@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code → Azure Databricks 연결 실습 가이드</title>
+<meta name="description" content="노트북의 Claude Code가 Azure Databricks의 Claude 모델을 쓰도록 연결합니다. 실제 Azure에서 따라 한 화면 캡처와 영상으로 정리했습니다.">
+<meta name="theme-color" content="#0f1a38">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:site_name" content="Claude Code × Azure Databricks 실습 가이드">
+<meta property="og:title" content="Claude Code → Azure Databricks 연결 실습 가이드">
+<meta property="og:description" content="노트북의 Claude Code가 Azure Databricks의 Claude 모델을 쓰도록 연결합니다. 실제 Azure에서 따라 한 화면 캡처와 영상으로 정리했습니다.">
+<meta property="og:image" content="https://junwoojeong100.github.io/claude-on-azure-databricks/assets/img/og-index.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A7%AA%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f5f7fb; --panel:#ffffff; --text:#172033; --muted:#566079; --line:#e2e7f0; --soft:#f0f3fa;
+  --brand:#2563eb; --brand2:#7c3aed; --accent:#ff5a36;
+  --ok:#157f43; --okbg:#ecfaf1; --warn:#9a5b00; --warnbg:#fff8e6; --info:#1d4ed8; --infobg:#eef4ff; --err:#b42318; --errbg:#fef1f0; --tip:#6d28d9; --tipbg:#f5f0ff;
+  --codebg:#0d1117; --codefg:#d7dde8; --radius:16px; --shadow:0 1px 2px rgba(15,23,42,.05),0 10px 30px rgba(15,23,42,.06);
+  --font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"D2Coding",monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0b1020; --panel:#121a30; --text:#e7ecf7; --muted:#9aa7c2; --line:#25314d; --soft:#18223c;
+  --okbg:#0f2a1d; --warnbg:#2c2210; --infobg:#10233f; --errbg:#2d1416; --tipbg:#221a3a; --ok:#59d38a; --warn:#f2b44d; --info:#7db0ff; --err:#ff8a80; --tip:#c4a5ff;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+}}
+*{box-sizing:border-box} html{scroll-behavior:smooth;scroll-padding-top:20px}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.75 var(--font);-webkit-font-smoothing:antialiased}
+a{color:var(--brand)} code{font-family:var(--mono);font-size:.88em;background:var(--soft);padding:.12em .4em;border-radius:6px;border:1px solid var(--line)}
+strong{font-weight:700}
+p,li,td,th,.lead,h1,h2,h3,.ct,figcaption,summary,.sub,.cap{word-break:keep-all;overflow-wrap:break-word}
+code{overflow-wrap:anywhere}
+.progress{position:fixed;left:0;top:0;height:3px;width:0;background:linear-gradient(90deg,var(--brand),var(--brand2));z-index:50}
+.hero{background:radial-gradient(900px 380px at 12% -20%,#3b6cf0 0,transparent 60%),radial-gradient(700px 360px at 100% 0,#8b5cf6 0,transparent 55%),#0f1a38;color:#fff;padding:44px 24px 40px}
+.hero-in{max-width:1240px;margin:0 auto}
+.eyebrow{display:inline-flex;gap:8px;align-items:center;font-weight:700;letter-spacing:.02em;font-size:13px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);padding:5px 12px;border-radius:99px}
+.hero h1{font-size:clamp(28px,4.2vw,44px);line-height:1.2;margin:16px 0 10px;letter-spacing:-.02em}
+.hero .sub{font-size:clamp(16px,2vw,19px);color:#dbe4ff;max-width:820px;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0}
+.chip{font-size:13px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:4px 12px;border-radius:99px;color:#eaf0ff}
+.diagram{margin:26px 0 0;background:var(--panel);color:var(--text);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.diagram svg{display:block;width:100%;height:auto}
+.diagram .cap{margin:8px 4px 0;color:var(--muted);font-size:14px}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:34px;max-width:1240px;margin:0 auto;padding:26px 24px 80px}
+.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;padding-right:6px}
+.toc-t{font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--muted);margin:2px 0 10px;text-transform:uppercase}
+.toc a{display:flex;gap:10px;align-items:baseline;padding:8px 10px;border-radius:10px;color:var(--text);text-decoration:none;font-size:14.5px;line-height:1.4;border:1px solid transparent}
+.toc a .n{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--soft);color:var(--muted)}
+.toc a:hover{background:var(--soft)} .toc a.on{background:var(--panel);border-color:var(--line);box-shadow:var(--shadow);font-weight:700}
+.toc a.on .n{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+.toc .sep{height:1px;background:var(--line);margin:10px 4px}
+main{min-width:0}
+.hint{margin:6px 2px 0;color:var(--muted);font-size:14px}
+.overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:2px 0 8px}
+.ov{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 14px 12px;text-decoration:none;color:var(--text);box-shadow:var(--shadow);display:block}
+.ov b{display:block;font-size:15px} .ov span{display:block;font-size:13px;color:var(--muted);margin-top:2px;line-height:1.45}
+.ov .k{font-size:12px;font-weight:800;color:var(--brand);letter-spacing:.04em}
+.ov:hover{border-color:var(--brand)}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px 30px;margin:26px 0}
+.step-head{display:flex;gap:16px;align-items:flex-start;margin-bottom:6px}
+.num{flex:none;min-width:40px;height:40px;padding:0 6px;border-radius:20px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;display:grid;place-items:center;font-weight:800;font-size:16px;margin-top:2px}
+.step h2{margin:0;font-size:clamp(21px,2.6vw,26px);line-height:1.3;letter-spacing:-.01em}
+.lead{margin:4px 0 0;color:var(--muted);font-size:16.5px}
+.step h3{font-size:18px;margin:30px 0 8px;padding-top:6px;border-top:1px dashed var(--line)}
+.step h3:first-of-type{border-top:0;margin-top:20px}
+.badge-ok{font-size:12px;font-weight:700;color:var(--ok);background:var(--okbg);border:1px solid var(--ok);padding:1px 9px;border-radius:99px;margin-left:10px;vertical-align:middle;white-space:nowrap}
+.code{margin:14px 0;border-radius:12px;overflow:hidden;background:var(--codebg);border:1px solid #1f2a44}
+.code-head{display:flex;justify-content:space-between;align-items:center;padding:6px 10px 6px 14px;background:#161d30;color:#8fa0c4;font-size:12px;font-family:var(--mono)}
+.copy{font:600 12px var(--font);color:#c8d3ee;background:#232d47;border:1px solid #2f3b5c;border-radius:8px;padding:4px 10px;cursor:pointer}
+.copy:hover{background:#2c3858} .copy.ok{color:#7ee2a8;border-color:#2f6b4c}
+.code pre{margin:0;padding:14px 16px;overflow:auto;color:var(--codefg);font:13.5px/1.65 var(--mono);tab-size:2}
+.code .c{color:#7d8aa8}
+.code pre code{background:none;border:0;padding:0;border-radius:0;font-size:inherit;color:inherit;white-space:pre}
+.tabs{margin:14px 0}
+.tablist{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:12px}
+.tablist button{font:600 14px var(--font);background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:9px 14px;cursor:pointer;border-radius:8px 8px 0 0}
+.tablist button[aria-selected=true]{color:var(--brand);border-bottom-color:var(--brand)} .tablist button:hover{background:var(--soft)}
+.tabpanel[hidden]{display:none}
+.media{margin:18px 0}
+.media img,.media video{display:block;width:100%;height:auto;border-radius:12px;border:1px solid var(--line);background:#0d1117}
+.vwrap{border-radius:12px;overflow:hidden;background:#0d1117}
+.media figcaption{margin-top:8px;color:var(--muted);font-size:14.5px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tag{font-size:12px;font-weight:700;background:var(--soft);border:1px solid var(--line);border-radius:99px;padding:1px 9px;color:var(--text);white-space:nowrap}
+.tag.play{background:#fff1ee;border-color:#ffc9bd;color:#c2300f} @media (prefers-color-scheme:dark){.tag.play{background:#33191a;border-color:#6b2c2c;color:#ff9f8a}}
+.dur{margin-left:auto;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.zoom{cursor:zoom-in;display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px} .grid2 .media{margin:10px 0}
+.callout{display:flex;gap:12px;border-radius:12px;padding:14px 16px;margin:16px 0;border:1px solid var(--line)}
+.callout>div:last-child{min-width:0;flex:1}
+.callout .ico{font-size:20px;line-height:1.5;flex:none} .callout .ct{display:block;margin-bottom:2px} .callout p{margin:4px 0}
+.callout.info{background:var(--infobg);border-color:color-mix(in srgb,var(--info) 30%,transparent)} .callout.info .ct{color:var(--info)}
+.callout.warn{background:var(--warnbg);border-color:color-mix(in srgb,var(--warn) 35%,transparent)} .callout.warn .ct{color:var(--warn)}
+.callout.ok{background:var(--okbg);border-color:color-mix(in srgb,var(--ok) 35%,transparent)} .callout.ok .ct{color:var(--ok)}
+.callout.err{background:var(--errbg);border-color:color-mix(in srgb,var(--err) 35%,transparent)} .callout.err .ct{color:var(--err)}
+.callout.tip{background:var(--tipbg);border-color:color-mix(in srgb,var(--tip) 35%,transparent)} .callout.tip .ct{color:var(--tip)}
+.done{margin:18px 0 4px;border:1px solid color-mix(in srgb,var(--ok) 40%,transparent);background:var(--okbg);border-radius:12px;padding:12px 16px}
+.done-t{font-weight:800;color:var(--ok);margin-bottom:4px} .done ul{margin:0;padding-left:1.2em} .done li{margin:2px 0}
+.table-wrap{overflow:auto;margin:14px 0;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:15px} th,td{padding:10px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{background:var(--soft);font-size:13px;letter-spacing:.02em;color:var(--muted)} tr:last-child td{border-bottom:0}
+ol.steps{margin:12px 0;padding-left:0;list-style:none;counter-reset:s}
+ol.steps>li{counter-increment:s;position:relative;padding:4px 0 4px 40px;margin:8px 0}
+ol.steps>li::before{content:counter(s);position:absolute;left:0;top:3px;width:26px;height:26px;border-radius:50%;background:var(--soft);border:1px solid var(--line);display:grid;place-items:center;font-weight:700;font-size:13px}
+details.more{border:1px solid var(--line);border-radius:12px;margin:12px 0;background:var(--panel)}
+details.more>summary{cursor:pointer;padding:13px 16px;font-weight:700;list-style:none;display:flex;align-items:center;gap:8px}
+details.more>summary::before{content:"▸";transition:transform .15s;color:var(--muted)} details.more[open]>summary::before{transform:rotate(90deg)}
+details.more>summary::-webkit-details-marker{display:none} .more-body{padding:0 18px 14px}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.crumb{display:block;width:fit-content;margin:0 0 12px;color:#cfdcff;font-size:13.5px;text-decoration:none}
+.crumb:hover{text-decoration:underline;color:#fff}
+.foot{max-width:1240px;margin:0 auto;padding:0 24px 60px;color:var(--muted);font-size:14px}
+.foot .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px 26px;box-shadow:var(--shadow)}
+.foot h3{margin:0 0 8px;color:var(--text);font-size:17px} .foot ul{margin:6px 0 14px;padding-left:1.2em}
+.next{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0 0}
+.btn{display:inline-flex;gap:8px;align-items:center;text-decoration:none;font-weight:700;padding:10px 16px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+.btn.ghost{background:var(--panel);color:var(--text);border:1px solid var(--line)}
+#lb{position:fixed;inset:0;background:rgba(5,8,18,.88);display:none;align-items:center;justify-content:center;z-index:100;cursor:zoom-out;padding:24px}
+#lb.on{display:flex} #lb img{max-width:min(96vw,1500px);max-height:94vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.skip{position:absolute;left:-999px;top:8px;background:#fff;color:#000;padding:8px 12px;border-radius:8px;z-index:200} .skip:focus{left:8px}
+@media (max-width:1020px){
+  .layout{grid-template-columns:1fr;gap:12px;padding:14px 14px 60px}
+  .toc{position:sticky;top:0;z-index:40;max-height:none;display:flex;gap:6px;overflow-x:auto;padding:8px;margin:0 -14px;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .toc-t,.toc .sep{display:none} .toc a{flex:none;padding:6px 10px;font-size:13.5px;white-space:nowrap}
+  .step{padding:20px 16px} .grid2{grid-template-columns:1fr} .hero{padding:30px 16px} .overview{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .diagram{padding:10px} .num{min-width:34px;height:34px}
+}
+@media print{.toc,.progress,.copy,#lb{display:none!important} .layout{display:block} .step{box-shadow:none;break-inside:avoid-page} .hero{background:#fff!important;color:#000} .hero .sub,.chip{color:#000!important} body{background:#fff}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+.wrap{max-width:1100px;margin:0 auto;padding:30px 24px 10px}
+.wrap h2{font-size:clamp(20px,2.4vw,24px);margin:34px 0 12px;letter-spacing:-.01em}
+.wrap h2:first-child{margin-top:0}
+.pick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.pick{display:flex;flex-direction:column;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px 26px}
+.pick .k{font-size:12px;font-weight:800;letter-spacing:.06em;color:var(--brand)}
+.pick h3{margin:0;font-size:23px;line-height:1.3;letter-spacing:-.01em}
+.pick p{margin:0;color:var(--muted)}
+.pick ul{margin:0;padding-left:1.15em} .pick li{margin:3px 0}
+.flowrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:2px 0}
+.node{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-weight:700;font-size:14.5px;line-height:1.35}
+.node small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+.node.mid{background:var(--tipbg);border-color:var(--tip)}
+.arrow{color:var(--brand);font-weight:800}
+.pick .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:4px}
+.pick .btn{align-self:flex-start;margin-top:4px}
+@media (max-width:1020px){.pick-grid{grid-template-columns:1fr}.wrap{padding:22px 14px 6px}}
+.foot{max-width:1100px}
+.hero-in{max-width:1052px}
+</style>
+<noscript><style>.tabpanel[hidden]{display:block!important}</style></noscript>
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+<div class="progress" aria-hidden="true"></div>
+<header class="hero"><div class="hero-in">
+  <span class="eyebrow">실습 가이드 · 1페이지 HTML</span>
+  <h1>Claude Code를 <span style='color:#ffd36b'>Azure Databricks</span>에 연결하기</h1>
+  <p class="sub">노트북의 Claude Code가 Azure Databricks의 Claude 모델을 쓰도록 연결합니다. 실제 Azure에서 따라 한 화면 캡처와 영상으로 정리했습니다.</p>
+  <div class="chips"><span class="chip">⏱ 가이드당 약 15분</span><span class="chip">🧪 2026-11-24 실제 실행</span><span class="chip">🎬 영상 15개 · 🖼 화면 12장</span><span class="chip">Claude Code 2.1.331</span></div>
+</div></header>
+<main id="main">
+<div class="wrap">
+<h2>먼저 구성을 고르세요</h2>
+<div class="pick-grid"><article class="pick"><span class="k">A · LiteLLM 없이</span><h3>직접 연결</h3><div class="flowrow" role="img" aria-label="노트북의 Claude Code가 Azure Databricks를 직접 호출"><span class="node ">💻 노트북<small>Claude Code</small></span><span class="arrow" aria-hidden="true">→</span><span class="node ">☁️ Azure Databricks<small>Anthropic Messages API</small></span></div><p>중간 서버 없이 Databricks의 Anthropic 네이티브 API를 바로 호출합니다. 값 3개(URL · Token · Model ID)면 됩니다.</p><ul class=""><li>개인 PC에서 빠르게 검증하고 싶을 때</li><li>가장 단순한 구성 — 따로 운영할 서버가 없음</li><li>workspace가 없으면 3분 만에 새로 만드는 단계 포함</li></ul><div class="meta"><span class="tag">⏱ 약 15분</span><span class="tag">🎬 영상 9개</span><span class="tag">🖼 화면 10장</span></div><a class="btn" href="databricks-direct.html">직접 연결 가이드 시작 ▸</a></article><article class="pick"><span class="k">B · LiteLLM 경유</span><h3>게이트웨이 연결</h3><div class="flowrow" role="img" aria-label="노트북의 Claude Code가 LiteLLM을 거쳐 Azure Databricks를 호출"><span class="node ">💻 노트북<small>Claude Code</small></span><span class="arrow" aria-hidden="true">→</span><span class="node mid">🔀 LiteLLM<small>게이트웨이</small></span><span class="arrow" aria-hidden="true">→</span><span class="node ">☁️ Azure Databricks<small>Foundation Model API</small></span></div><p>노트북에는 LiteLLM 주소와 key만 두고, Databricks 토큰은 LiteLLM 서버에만 보관합니다. Claude Code 값 2개만 바꿉니다.</p><ul class=""><li>팀·조직이 키·모델·로그를 한곳에서 관리할 때</li><li>기존 모델 이름(alias)을 그대로 유지</li><li>여러 provider를 한 주소로 통합</li></ul><div class="meta"><span class="tag">⏱ 약 15분</span><span class="tag">🎬 영상 6개</span><span class="tag">🖼 화면 2장</span></div><a class="btn ghost" href="databricks-litellm.html">LiteLLM 경유 가이드 시작 ▸</a></article></div>
+<h2>두 방식 비교</h2>
+<div class="table-wrap"><table class=""><thead><tr><th></th><th>A · 직접 연결</th><th>B · LiteLLM 경유</th></tr></thead><tbody><tr><td>Claude Code <code>ANTHROPIC_BASE_URL</code></td><td>Databricks <code>/serving-endpoints/anthropic</code></td><td><strong>LiteLLM URL</strong></td></tr><tr><td>Claude Code 토큰</td><td>Databricks PAT / OAuth</td><td><strong>LiteLLM key</strong> (사용자별 virtual key 권장)</td></tr><tr><td>Databricks credential 위치</td><td>사용자 PC마다</td><td><strong>LiteLLM 서버에만</strong></td></tr><tr><td>모델 이름</td><td><code>databricks-claude-*</code></td><td><strong>같은 이름을 alias로 유지</strong></td></tr><tr><td>이럴 때</td><td>개인 검증, 가장 단순</td><td>중앙 인증·예산·로그·여러 provider 통합</td></tr></tbody></table></div>
+<aside class="callout tip"><div class="ico" aria-hidden="true">✨</div><div><strong class="ct">처음이라면 A → B 순서로</strong><p>B 가이드는 A에서 만든 Databricks 접속 정보(URL · Token · Model ID)를 그대로 씁니다. 회사에 이미 LiteLLM 서버가 있다면 B의 6단계부터 따라 하면 됩니다.</p></div></aside>
+<aside class="callout info"><div class="ico" aria-hidden="true">💡</div><div><strong class="ct">화면 보는 법</strong><p>영상은 화면에 들어오면 자동 재생(무음)되며 일시정지·되감기를 할 수 있습니다. 이미지는 클릭하면 크게 보이고, 코드 블록의 <strong>복사</strong> 버튼으로 명령을 그대로 복사할 수 있습니다.</p></div></aside>
+<aside class="callout warn"><div class="ico" aria-hidden="true">⚠️</div><div><strong class="ct">비용 안내</strong><p>Databricks workspace와 pay-per-token 모델 호출에는 비용이 발생합니다. 실습 후 만든 리소스는 각 가이드의 마지막 단계(정리)로 삭제하세요.</p></div></aside>
+</div>
+</main>
+<footer class="foot">
+<div class="card">
+  <h3>이 가이드는 실제로 실행해서 만들었습니다</h3>
+  <p>실제 Azure 리소스를 만들고 따라 한 기록입니다. 계정·구독·토큰 등 민감 정보는 가렸고, 오래 걸리는 구간은 ⏩ 표시와 함께 빨리 감았습니다.</p>
+  <div class="table-wrap"><table class=""><thead><tr><th>항목</th><th>실습 환경</th></tr></thead><tbody><tr><td>실행일</td><td>2026-11-24</td></tr><tr><td>Azure Databricks</td><td>Premium workspace · <code>eastus2</code></td></tr><tr><td>Claude Code</td><td>2.1.331</td></tr><tr><td>LiteLLM</td><td>1.110.3 (Docker)</td></tr></tbody></table></div>
+  <h3>소스 · 원문 문서</h3>
+  <ul>
+    <li><a href="https://github.com/junwoojeong100/claude-on-azure-databricks" target="_blank" rel="noopener">GitHub 리포지토리</a> · <a href="https://github.com/junwoojeong100/claude-on-azure-databricks#readme" target="_blank" rel="noopener">README</a></li>
+    <li><a href="https://github.com/junwoojeong100/claude-on-azure-databricks/blob/main/docs/claude-code-databricks.md" target="_blank" rel="noopener">직접 연결 (Markdown)</a> · <a href="https://github.com/junwoojeong100/claude-on-azure-databricks/blob/main/docs/existing-litellm-databricks.md" target="_blank" rel="noopener">기존 LiteLLM 연결 (Markdown)</a> · <a href="https://github.com/junwoojeong100/claude-on-azure-databricks/blob/main/docs/azure-databricks-setup.md" target="_blank" rel="noopener">workspace 만들기</a> · <a href="https://github.com/junwoojeong100/claude-on-azure-databricks/blob/main/docs/claude-code-databricks-feature-coverage.md" target="_blank" rel="noopener">기능 커버리지</a></li>
+  </ul>
+</div>
+</footer>
+<script>
+(() => {
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  // copy buttons
+  $$('.code').forEach((box) => {
+    const btn = box.querySelector('.copy'); if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const text = box.querySelector('code').innerText.replace(/\u00a0/g, ' ');
+      try { await navigator.clipboard.writeText(text); } catch (e) {
+        const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
+      }
+      btn.textContent = '복사됨 ✓'; btn.classList.add('ok');
+      setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('ok'); }, 1600);
+    });
+  });
+  // tabs
+  $$('[data-tabs]').forEach((t) => {
+    const tabs = $$('[role=tab]', t), panels = $$('[role=tabpanel]', t);
+    tabs.forEach((tab, i) => tab.addEventListener('click', () => {
+      tabs.forEach((x, j) => x.setAttribute('aria-selected', j === i ? 'true' : 'false'));
+      panels.forEach((p, j) => { p.hidden = j !== i; });
+    }));
+  });
+  // lightbox
+  const lb = document.createElement('div'); lb.id = 'lb'; lb.innerHTML = '<img alt="">'; document.body.appendChild(lb);
+  const close = () => lb.classList.remove('on');
+  $$('a.zoom').forEach((a) => a.addEventListener('click', (ev) => { ev.preventDefault(); lb.querySelector('img').src = a.href; lb.querySelector('img').alt = a.querySelector('img').alt; lb.classList.add('on'); }));
+  lb.addEventListener('click', close); addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+  // autoplay videos only while visible
+  const vio = new IntersectionObserver((es) => es.forEach((en) => {
+    const v = en.target;
+    if (en.isIntersecting && en.intersectionRatio >= 0.3) { if (v.ended) v.currentTime = 0; v.play().catch(() => {}); } else v.pause();
+  }), { threshold: [0, 0.3, 1] });
+  $$('video[data-auto]').forEach((v) => vio.observe(v));
+  // toc highlight + progress bar
+  const links = $$('.toc a[href^="#"]'); const secs = links.map((a) => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const bar = document.querySelector('.progress');
+  const onScroll = () => {
+    const h = document.documentElement; bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+    let cur = secs[0]; secs.forEach((s) => { if (s.getBoundingClientRect().top < innerHeight * 0.35) cur = s; });
+    links.forEach((a) => a.classList.toggle('on', cur && a.getAttribute('href') === '#' + cur.id));
+  };
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+})();
+</script>
+</body>
+</html>

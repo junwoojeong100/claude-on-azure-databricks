@@ -1,0 +1,43 @@
+name: Pages
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check site entry point
+        run: test -f docs/guide/index.html
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/guide
+
+  deploy:
+    name: Deploy
+    # Pull requests only build the artifact. The github-pages environment
+    # additionally limits deployments to the main branch.
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
