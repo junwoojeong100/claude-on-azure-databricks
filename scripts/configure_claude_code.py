@@ -16,25 +16,25 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-DEFAULT_MODEL = "databricks-claude-opus-5[1m]"
-DEFAULT_SONNET_MODEL = "databricks-claude-sonnet-5[1m]"
+DEFAULT_MODEL = "databricks-claude-opus-5-5"
+DEFAULT_SONNET_MODEL = "databricks-claude-sonnet-5-5"
 ANTHROPIC_PATH = "/serving-endpoints/anthropic"
 MODEL_ENV = {
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-5[1m]",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus 5 (1M context)",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": DEFAULT_MODEL,
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus 5.5 (1M context)",
     "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-4-8[1m]",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 4.8 (1M context)",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-5",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 5 (1M context)",
     "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": DEFAULT_SONNET_MODEL,
-    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5 (1M context)",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5.5 (1M context)",
     "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Custom Sonnet model (1M context)",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-4-6[1m]",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Sonnet 4.6 (1M context)",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-5",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Sonnet 5 (1M context)",
     "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Custom Sonnet model (1M context)",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-4-5",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku 4.5 (200K context)",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Custom Haiku model (200K context)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-5-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku 5.5 (1M context)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Custom Haiku model (1M context)",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1",
 }
 CONFLICTING_ENV_KEYS = {
@@ -330,7 +330,7 @@ def main() -> int:
 
     print(f"Claude Code settings: {path}")
     print(f"Default model: {DEFAULT_MODEL}")
-    print("Models: Opus 5, Opus 4.8, Sonnet 5, Sonnet 4.6, Haiku 4.5")
+    print("Models: Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5, Haiku 5.5")
     if backup_path:
         print(f"Backup: {backup_path}")
     if removed_conflicts:

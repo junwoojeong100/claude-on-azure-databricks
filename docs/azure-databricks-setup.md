@@ -26,14 +26,15 @@ classic workspace를 만듭니다. 조직이 serverless workspace를 제공한�
 모델 ID와 리전 가용성은 다음 공식 문서에서 확인합니다.
 
 - [지원 모델](https://learn.microsoft.com/azure/databricks/machine-learning/foundation-model-apis/supported-models)
-- [리전별 Foundation Model 가용성](https://learn.microsoft.com/azure/databricks/machine-learning/model-serving/foundation-model-overview)
+- [리전별 모델 가용성](https://learn.microsoft.com/azure/databricks/unity-gateway/model-region-availability)
 
-이 가이드와 스크립트의 기본 예시는 Opus 5, Sonnet 5, Haiku 4.5를 제공하는
-`eastus2`를 사용합니다. `koreacentral`에서는 Opus 5, Sonnet 4.6, Haiku 4.5가
-cross-Geo 대상으로 표시되지만 Sonnet 5는 현재 리전 표에 없습니다. 한국 리전을
-선택한다면 Sonnet mapping을 Sonnet 4.6으로 바꾸고, 계정 관리자가
+이 가이드와 스크립트의 기본 예시는 최신 Opus 5.5, Sonnet 5.5, Haiku 5.5를 cross-Geo
+설정 없이 제공하는 `eastus2`를 사용합니다(2026-11-25 공식 리전 표 기준). `koreacentral`에서는
+5.5 모델에 cross-Geo 라우팅이 필요하고 Opus 5와 Sonnet 5는 cross-Geo 없이 사용할 수
+있습니다. 한국 리전을 선택한다면 계정 관리자가
 [cross-Geo 처리 설정](https://learn.microsoft.com/azure/databricks/resources/databricks-geos#cross-geo-processing)과
-조직의 데이터 레지던시 요구사항을 먼저 확인해야 합니다.
+조직의 데이터 레지던시 요구사항을 먼저 확인해야 합니다. Fable 모델도 cross-Geo 처리가
+필요해 기본 구성에는 포함하지 않았습니다.
 
 이 스크립트의 smoke test 모델과 Claude Code의 `/model` picker 구성은 서로 독립적입니다.
 Smoke test는 모델 하나로 연결을 확인하고, 성공하면
@@ -98,7 +99,7 @@ PowerShell에서는 `-ResourceGroup`, `-Location`, `-Workspace` 같은 parameter
 | `LOCATION` | `eastus2` | Azure 리전 |
 | `WORKSPACE` | `ws-databricks-claude` | Databricks workspace |
 | `SKU` | `premium` | Workspace SKU |
-| `DATABRICKS_SERVING_ENDPOINT` | `databricks-claude-opus-5` | 검증할 기본 Claude 모델 |
+| `DATABRICKS_SERVING_ENDPOINT` | `databricks-claude-opus-5-5` | 검증할 기본 Claude 모델 |
 | `CONFIGURE_CLAUDE_CODE` | `1` | 성공 시 Claude Code 다중 모델 설정 병합 |
 | `CLAUDE_CODE_SCOPE` | `project` | `project` 또는 `user` 설정 범위 |
 
@@ -117,7 +118,7 @@ OpenAI 호환 경로만 성공하고 네이티브 Anthropic 경로가 실패하�
 
 ```dotenv
 DATABRICKS_HOST=https://<workspace-host>
-DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-5
+DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-5-5
 DATABRICKS_TOKEN=<databricks-token>
 ```
 
@@ -269,6 +270,19 @@ az group delete \
   --yes \
   --no-wait
 ```
+
+workspace가 삭제되면 `databricks-rg-<workspace>-…` managed resource group도 비동기로
+삭제됩니다. 수십 분 이상 걸릴 수 있으므로 사라졌는지 확인하세요.
+
+```bash
+az group list \
+  --subscription "$SUBSCRIPTION_ID" \
+  --query "[?starts_with(name,'databricks-rg-')].{name:name,state:properties.provisioningState}" \
+  --output table
+```
+
+workspace가 이미 없는데도 managed resource group이 계속 남아 있다면 해당 이름이 삭제한
+workspace의 것인지 확인한 뒤 `az group delete`로 직접 삭제합니다.
 
 로컬 `.env`도 더 이상 필요하지 않으면 삭제합니다.
 

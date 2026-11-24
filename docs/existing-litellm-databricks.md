@@ -114,14 +114,19 @@ Databricks provider로 전달할 backend 이름입니다. 인증정보는 2절�
 model_list:
   # 기존 모델은 그대로 유지합니다.
 
+  - model_name: databricks-claude-opus-5-5
+    litellm_params:
+      model: databricks/databricks-claude-opus-5-5
+      api_base: os.environ/DATABRICKS_API_BASE
+
   - model_name: databricks-claude-opus-5
     litellm_params:
       model: databricks/databricks-claude-opus-5
       api_base: os.environ/DATABRICKS_API_BASE
 
-  - model_name: databricks-claude-opus-4-8
+  - model_name: databricks-claude-sonnet-5-5
     litellm_params:
-      model: databricks/databricks-claude-opus-4-8
+      model: databricks/databricks-claude-sonnet-5-5
       api_base: os.environ/DATABRICKS_API_BASE
 
   - model_name: databricks-claude-sonnet-5
@@ -129,14 +134,9 @@ model_list:
       model: databricks/databricks-claude-sonnet-5
       api_base: os.environ/DATABRICKS_API_BASE
 
-  - model_name: databricks-claude-sonnet-4-6
+  - model_name: databricks-claude-haiku-5-5
     litellm_params:
-      model: databricks/databricks-claude-sonnet-4-6
-      api_base: os.environ/DATABRICKS_API_BASE
-
-  - model_name: databricks-claude-haiku-4-5
-    litellm_params:
-      model: databricks/databricks-claude-haiku-4-5
+      model: databricks/databricks-claude-haiku-5-5
       api_base: os.environ/DATABRICKS_API_BASE
 ```
 
@@ -147,9 +147,9 @@ YAML에 `api_key`를 추가할 필요가 없습니다. 방법 A에서는 LiteLLM
 않습니다.
 
 Workspace에서 호출할 수 없는 모델은 등록하지 않습니다. `[1m]` suffix도 LiteLLM
-`model_name`에 넣지 않습니다. Claude Code가 `databricks-claude-opus-5[1m]`처럼
-선택하면 `[1m]`을 제거한 모델 이름을 LiteLLM에 보내고 1M context beta header를
-별도로 추가합니다.
+`model_name`에 넣지 않습니다. 이 리포의 구성은 `[1m]` 없이 모델 이름만 보내고, 예전
+구성처럼 `databricks-claude-sonnet-4-6[1m]`을 선택해도 Claude Code가 `[1m]`을 제거한
+모델 이름을 LiteLLM에 보내고 1M context beta header를 별도로 추가합니다.
 
 기존 `general_settings`, `router_settings`, callback, budget, rate limit와 database
 설정은 변경하지 않고 `model_list`의 필요한 항목만 병합합니다.
@@ -181,7 +181,7 @@ curl -sS "$LITELLM_BASE_URL/v1/messages" \
   -H "anthropic-version: 2023-06-01" \
   -H "content-type: application/json" \
   -d '{
-    "model": "databricks-claude-opus-5",
+    "model": "databricks-claude-opus-5-5",
     "max_tokens": 16,
     "messages": [
       {
@@ -195,6 +195,11 @@ curl -sS "$LITELLM_BASE_URL/v1/messages" \
 응답의 최상위 `type`이 `message`이면 LiteLLM 인증, alias와 Databricks backend가 모두
 연결된 것입니다. 모델별 virtual key 권한을 사용한다면 해당 key에 위 alias를
 허용했는지도 확인합니다.
+
+LiteLLM을 거치면 `databricks-claude-opus-5`는 `thinking` 블록을 먼저 만들기 때문에
+`max_tokens`가 너무 작으면(예: 16) `stop_reason`이 `max_tokens`로 끝나고 `text`가 비어
+보일 수 있습니다. 기본 모델인 Opus 5.5와 Sonnet 5.5, Sonnet 5, Haiku 5.5는 16에서도
+바로 `text`가 반환됩니다. 모델을 바꿔 가며 확인할 때는 64 이상을 사용하세요.
 
 ## 5. Claude Code 설정에서 두 값만 교체
 
@@ -231,7 +236,7 @@ curl -sS "$LITELLM_BASE_URL/v1/messages" \
 Claude Code를 완전히 종료한 뒤 새 터미널에서 실행합니다.
 
 ```bash
-claude --model "databricks-claude-opus-5[1m]" \
+claude --model "databricks-claude-opus-5-5" \
   -p "Reply with exactly: CLAUDE CODE LITELLM OK" \
   --output-format json
 ```
@@ -246,7 +251,7 @@ VS Code extension도 사용한다면 VS Code 사용자 settings의
 `claudeCode.environmentVariables`에 같은 LiteLLM URL과 key를 별도로 설정합니다.
 
 > **완료 기준:** `/status`의 Anthropic base URL이 조직의 LiteLLM URL이고,
-> `claude --model "databricks-claude-opus-5[1m]"` 테스트가 성공합니다.
+> `claude --model "databricks-claude-opus-5-5"` 테스트가 성공합니다.
 
 ## 문제 해결
 
@@ -259,7 +264,7 @@ VS Code extension도 사용한다면 VS Code 사용자 settings의
 | beta 관련 `400` | Claude Code의 `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
 | 기존 모델이 사라짐 | `model_list` 전체 덮어쓰기 여부, DB 설정 source 확인 |
 | 설정을 바꿔도 반영되지 않음 | `store_model_in_db`, Admin UI 값, 실제 `--config` 경로 |
-| `[1m]` 모델을 찾지 못함 | LiteLLM alias에서 `[1m]` 제거, Claude Code 최신 버전 |
+| `[1m]`이 붙은 모델을 찾지 못함 | LiteLLM `model_name`에 `[1m]`을 넣지 않았는지, Claude Code 버전(5.5 계열은 2.1.293 이상) |
 
 ## 공식 문서
 

@@ -209,11 +209,12 @@ class DocumentationTests(unittest.TestCase):
             "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME",
             "ANTHROPIC_DEFAULT_HAIKU_MODEL",
             "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+            "Opus 5.5 (1M context)",
             "Opus 5 (1M context)",
-            "Opus 4.8 (1M context)",
+            "Sonnet 5.5 (1M context)",
             "Sonnet 5 (1M context)",
-            "Sonnet 4.6 (1M context)",
-            "Haiku 4.5 (200K context)",
+            "Haiku 5.5 (1M context)",
+            "2.1.293",
             "## 2. Databricks API부터 검증",
             "## 4. 다중 모델 영구 설정",
             "## 5. 선택: 단일 모델 최소 설정",
@@ -228,7 +229,7 @@ class DocumentationTests(unittest.TestCase):
         settings = next(
             value
             for value in json_settings
-            if value.get("model") == "databricks-claude-opus-5[1m]"
+            if value.get("model") == "databricks-claude-opus-5-5"
             and "ANTHROPIC_DEFAULT_OPUS_MODEL" in value.get("env", {})
         )
         self.assertNotIn("availableModels", settings)
@@ -236,24 +237,28 @@ class DocumentationTests(unittest.TestCase):
         self.assertNotIn("modelOverrides", settings)
         self.assertEqual(
             settings["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"],
-            "databricks-claude-opus-5[1m]",
+            "databricks-claude-opus-5-5",
         )
         self.assertEqual(
             settings["env"]["ANTHROPIC_DEFAULT_FABLE_MODEL"],
-            "databricks-claude-opus-4-8[1m]",
+            "databricks-claude-opus-5",
         )
         self.assertEqual(
             settings["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"],
-            "databricks-claude-sonnet-5[1m]",
+            "databricks-claude-sonnet-5-5",
         )
         self.assertEqual(
             settings["env"]["ANTHROPIC_CUSTOM_MODEL_OPTION"],
-            "databricks-claude-sonnet-4-6[1m]",
+            "databricks-claude-sonnet-5",
+        )
+        self.assertEqual(
+            settings["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"],
+            "databricks-claude-haiku-5-5",
         )
         minimal_settings = next(
             value
             for value in json_settings
-            if value.get("model") == "databricks-claude-opus-5[1m]"
+            if value.get("model") == "databricks-claude-opus-5-5"
             and "ANTHROPIC_DEFAULT_OPUS_MODEL" not in value.get("env", {})
         )
         self.assertEqual(
@@ -288,7 +293,7 @@ class DocumentationTests(unittest.TestCase):
             guide.index('"ANTHROPIC_DEFAULT_OPUS_MODEL"'),
         )
 
-    def test_default_model_is_opus_5_across_guides_and_setup(self) -> None:
+    def test_default_model_is_opus_5_5_across_guides_and_setup(self) -> None:
         paths = (
             ROOT / ".env.example",
             ROOT / "README.md",
@@ -299,7 +304,7 @@ class DocumentationTests(unittest.TestCase):
         for path in paths:
             text = path.read_text(encoding="utf-8")
             with self.subTest(path=path.relative_to(ROOT)):
-                self.assertIn("databricks-claude-opus-5", text)
+                self.assertIn("databricks-claude-opus-5-5", text)
                 self.assertNotIn(
                     "DATABRICKS_SERVING_ENDPOINT=databricks-claude-opus-4-8",
                     text,
@@ -311,7 +316,7 @@ class DocumentationTests(unittest.TestCase):
         )
 
         for required_text in (
-            "databricks-claude-opus-5",
+            "databricks-claude-opus-5-5",
             "'databricks', 'workspace', 'create'",
             "/api/2.0/token/create",
             "/serving-endpoints/anthropic/v1/messages",

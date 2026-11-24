@@ -7,7 +7,7 @@ Claude Code를 Azure Databricks Claude 또는 Microsoft Foundry GPT-5.6에 연�
 Messages API에 직접 연결하고, Foundry GPT-5.6은 LiteLLM이 Anthropic Messages와
 OpenAI Responses API를 변환합니다.
 
-> 공식 문서 확인: 2026-08-02.
+> 공식 문서 확인: Azure Databricks Claude 2026-11-25, Microsoft Foundry 2026-08-02.
 > 모델과 리전 가용성, 쿼터, Preview 기능은 변경될 수 있으므로 운영 적용 전 공식
 > 문서를 다시 확인하세요.
 
@@ -57,9 +57,9 @@ OpenAI Responses API를 변환합니다.
 | --- | --- |
 | Workspace URL | `https://adb-<workspace-id>.<number>.azuredatabricks.net` |
 | Databricks credential | 빠른 검증은 PAT, 장기 사용자 인증은 OAuth U2M |
-| 호출 가능한 Claude 모델 ID 하나 | `databricks-claude-opus-5` |
+| 호출 가능한 Claude 모델 ID 하나 | `databricks-claude-opus-5-5` |
 
-아래 예시는 현재 기본 모델인 Opus 5를 사용합니다. Workspace에서 다른 모델만 사용할
+아래 예시는 현재 기본 모델인 Opus 5.5를 사용합니다. Workspace에서 다른 모델만 사용할
 수 있다면 `DATABRICKS_MODEL`을 실제 모델 ID로 바꾸세요. 설정 자동화에는 Git과
 Python 3.10 이상이 필요합니다.
 
@@ -73,7 +73,7 @@ cd claude-on-azure-databricks
 
 export ANTHROPIC_BASE_URL="https://<workspace-host>/serving-endpoints/anthropic"
 export ANTHROPIC_AUTH_TOKEN="<databricks-token>"
-export DATABRICKS_MODEL="databricks-claude-opus-5"
+export DATABRICKS_MODEL="databricks-claude-opus-5-5"
 
 curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
   -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
@@ -95,7 +95,7 @@ Windows PowerShell을 포함한 전체 명령은
 ```bash
 export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1
 
-claude --model "databricks-claude-opus-5[1m]" \
+claude --model "databricks-claude-opus-5-5" \
   -p "Reply with exactly: CLAUDE CODE OK" \
   --output-format json
 ```
@@ -122,7 +122,9 @@ py -3 scripts\configure_claude_code.py
 
 도구는 기존 `~/.claude/settings.json`을 백업하고 관련 키만 병합합니다. 백업은 최신
 1개만 유지합니다. `/model` picker에는 Opus·Sonnet 각 2개와 Haiku 1개가 표시되며
-기본 모델은 Opus 5입니다. 현재 프로젝트에만 적용하려면 `--scope project`를 추가하세요.
+기본 모델은 Opus 5.5입니다(최신 5.5 계열과 직전 Opus 5·Sonnet 5). 이전 구성으로 설정했다면
+같은 명령을 다시 실행해 갱신하세요. 현재 프로젝트에만 적용하려면 `--scope project`를
+추가하세요.
 
 ## 3. Databricks workspace가 없다면
 
