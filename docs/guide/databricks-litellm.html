@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code → LiteLLM → Azure Databricks 연결 실습</title>
+<meta name="description" content="중간에 LiteLLM 게이트웨이를 두면 Databricks credential은 서버에만 남고, 노트북에는 LiteLLM key만 있으면 됩니다. 값 두 개만 바꿔 연결합니다.">
+<style>
+:root{
+  --bg:#f5f7fb; --panel:#ffffff; --text:#172033; --muted:#566079; --line:#e2e7f0; --soft:#f0f3fa;
+  --brand:#2563eb; --brand2:#7c3aed; --accent:#ff5a36;
+  --ok:#157f43; --okbg:#ecfaf1; --warn:#9a5b00; --warnbg:#fff8e6; --info:#1d4ed8; --infobg:#eef4ff; --err:#b42318; --errbg:#fef1f0; --tip:#6d28d9; --tipbg:#f5f0ff;
+  --codebg:#0d1117; --codefg:#d7dde8; --radius:16px; --shadow:0 1px 2px rgba(15,23,42,.05),0 10px 30px rgba(15,23,42,.06);
+  --font:"Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"D2Coding",monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0b1020; --panel:#121a30; --text:#e7ecf7; --muted:#9aa7c2; --line:#25314d; --soft:#18223c;
+  --okbg:#0f2a1d; --warnbg:#2c2210; --infobg:#10233f; --errbg:#2d1416; --tipbg:#221a3a; --ok:#59d38a; --warn:#f2b44d; --info:#7db0ff; --err:#ff8a80; --tip:#c4a5ff;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+}}
+*{box-sizing:border-box} html{scroll-behavior:smooth;scroll-padding-top:20px}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.75 var(--font);-webkit-font-smoothing:antialiased}
+a{color:var(--brand)} code{font-family:var(--mono);font-size:.88em;background:var(--soft);padding:.12em .4em;border-radius:6px;border:1px solid var(--line)}
+strong{font-weight:700}
+p,li,td,th,.lead,h1,h2,h3,.ct,figcaption,summary,.sub,.cap{word-break:keep-all;overflow-wrap:break-word}
+code{overflow-wrap:anywhere}
+.progress{position:fixed;left:0;top:0;height:3px;width:0;background:linear-gradient(90deg,var(--brand),var(--brand2));z-index:50}
+.hero{background:radial-gradient(900px 380px at 12% -20%,#3b6cf0 0,transparent 60%),radial-gradient(700px 360px at 100% 0,#8b5cf6 0,transparent 55%),#0f1a38;color:#fff;padding:44px 24px 40px}
+.hero-in{max-width:1240px;margin:0 auto}
+.eyebrow{display:inline-flex;gap:8px;align-items:center;font-weight:700;letter-spacing:.02em;font-size:13px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);padding:5px 12px;border-radius:99px}
+.hero h1{font-size:clamp(28px,4.2vw,44px);line-height:1.2;margin:16px 0 10px;letter-spacing:-.02em}
+.hero .sub{font-size:clamp(16px,2vw,19px);color:#dbe4ff;max-width:820px;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0}
+.chip{font-size:13px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);padding:4px 12px;border-radius:99px;color:#eaf0ff}
+.diagram{margin:26px 0 0;background:var(--panel);color:var(--text);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+.diagram svg{display:block;width:100%;height:auto}
+.diagram .cap{margin:8px 4px 0;color:var(--muted);font-size:14px}
+.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:34px;max-width:1240px;margin:0 auto;padding:26px 24px 80px}
+.toc{position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px);overflow:auto;padding-right:6px}
+.toc-t{font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--muted);margin:2px 0 10px;text-transform:uppercase}
+.toc a{display:flex;gap:10px;align-items:baseline;padding:8px 10px;border-radius:10px;color:var(--text);text-decoration:none;font-size:14.5px;line-height:1.4;border:1px solid transparent}
+.toc a .n{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--soft);color:var(--muted)}
+.toc a:hover{background:var(--soft)} .toc a.on{background:var(--panel);border-color:var(--line);box-shadow:var(--shadow);font-weight:700}
+.toc a.on .n{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+.toc .sep{height:1px;background:var(--line);margin:10px 4px}
+main{min-width:0}
+.hint{margin:6px 2px 0;color:var(--muted);font-size:14px}
+.overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:2px 0 8px}
+.ov{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 14px 12px;text-decoration:none;color:var(--text);box-shadow:var(--shadow);display:block}
+.ov b{display:block;font-size:15px} .ov span{display:block;font-size:13px;color:var(--muted);margin-top:2px;line-height:1.45}
+.ov .k{font-size:12px;font-weight:800;color:var(--brand);letter-spacing:.04em}
+.ov:hover{border-color:var(--brand)}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px 30px;margin:26px 0}
+.step-head{display:flex;gap:16px;align-items:flex-start;margin-bottom:6px}
+.num{flex:none;min-width:40px;height:40px;padding:0 6px;border-radius:20px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;display:grid;place-items:center;font-weight:800;font-size:16px;margin-top:2px}
+.step h2{margin:0;font-size:clamp(21px,2.6vw,26px);line-height:1.3;letter-spacing:-.01em}
+.lead{margin:4px 0 0;color:var(--muted);font-size:16.5px}
+.step h3{font-size:18px;margin:30px 0 8px;padding-top:6px;border-top:1px dashed var(--line)}
+.step h3:first-of-type{border-top:0;margin-top:20px}
+.badge-ok{font-size:12px;font-weight:700;color:var(--ok);background:var(--okbg);border:1px solid var(--ok);padding:1px 9px;border-radius:99px;margin-left:10px;vertical-align:middle;white-space:nowrap}
+.code{margin:14px 0;border-radius:12px;overflow:hidden;background:var(--codebg);border:1px solid #1f2a44}
+.code-head{display:flex;justify-content:space-between;align-items:center;padding:6px 10px 6px 14px;background:#161d30;color:#8fa0c4;font-size:12px;font-family:var(--mono)}
+.copy{font:600 12px var(--font);color:#c8d3ee;background:#232d47;border:1px solid #2f3b5c;border-radius:8px;padding:4px 10px;cursor:pointer}
+.copy:hover{background:#2c3858} .copy.ok{color:#7ee2a8;border-color:#2f6b4c}
+.code pre{margin:0;padding:14px 16px;overflow:auto;color:var(--codefg);font:13.5px/1.65 var(--mono);tab-size:2}
+.code .c{color:#7d8aa8}
+.code pre code{background:none;border:0;padding:0;border-radius:0;font-size:inherit;color:inherit;white-space:pre}
+.tabs{margin:14px 0}
+.tablist{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:12px}
+.tablist button{font:600 14px var(--font);background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:9px 14px;cursor:pointer;border-radius:8px 8px 0 0}
+.tablist button[aria-selected=true]{color:var(--brand);border-bottom-color:var(--brand)} .tablist button:hover{background:var(--soft)}
+.tabpanel[hidden]{display:none}
+.media{margin:18px 0}
+.media img,.media video{display:block;width:100%;height:auto;border-radius:12px;border:1px solid var(--line);background:#0d1117}
+.vwrap{border-radius:12px;overflow:hidden;background:#0d1117}
+.media figcaption{margin-top:8px;color:var(--muted);font-size:14.5px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tag{font-size:12px;font-weight:700;background:var(--soft);border:1px solid var(--line);border-radius:99px;padding:1px 9px;color:var(--text);white-space:nowrap}
+.tag.play{background:#fff1ee;border-color:#ffc9bd;color:#c2300f} @media (prefers-color-scheme:dark){.tag.play{background:#33191a;border-color:#6b2c2c;color:#ff9f8a}}
+.dur{margin-left:auto;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.zoom{cursor:zoom-in;display:block}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px} .grid2 .media{margin:10px 0}
+.callout{display:flex;gap:12px;border-radius:12px;padding:14px 16px;margin:16px 0;border:1px solid var(--line)}
+.callout>div:last-child{min-width:0;flex:1}
+.callout .ico{font-size:20px;line-height:1.5;flex:none} .callout .ct{display:block;margin-bottom:2px} .callout p{margin:4px 0}
+.callout.info{background:var(--infobg);border-color:color-mix(in srgb,var(--info) 30%,transparent)} .callout.info .ct{color:var(--info)}
+.callout.warn{background:var(--warnbg);border-color:color-mix(in srgb,var(--warn) 35%,transparent)} .callout.warn .ct{color:var(--warn)}
+.callout.ok{background:var(--okbg);border-color:color-mix(in srgb,var(--ok) 35%,transparent)} .callout.ok .ct{color:var(--ok)}
+.callout.err{background:var(--errbg);border-color:color-mix(in srgb,var(--err) 35%,transparent)} .callout.err .ct{color:var(--err)}
+.callout.tip{background:var(--tipbg);border-color:color-mix(in srgb,var(--tip) 35%,transparent)} .callout.tip .ct{color:var(--tip)}
+.done{margin:18px 0 4px;border:1px solid color-mix(in srgb,var(--ok) 40%,transparent);background:var(--okbg);border-radius:12px;padding:12px 16px}
+.done-t{font-weight:800;color:var(--ok);margin-bottom:4px} .done ul{margin:0;padding-left:1.2em} .done li{margin:2px 0}
+.table-wrap{overflow:auto;margin:14px 0;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:15px} th,td{padding:10px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{background:var(--soft);font-size:13px;letter-spacing:.02em;color:var(--muted)} tr:last-child td{border-bottom:0}
+ol.steps{margin:12px 0;padding-left:0;list-style:none;counter-reset:s}
+ol.steps>li{counter-increment:s;position:relative;padding:4px 0 4px 40px;margin:8px 0}
+ol.steps>li::before{content:counter(s);position:absolute;left:0;top:3px;width:26px;height:26px;border-radius:50%;background:var(--soft);border:1px solid var(--line);display:grid;place-items:center;font-weight:700;font-size:13px}
+details.more{border:1px solid var(--line);border-radius:12px;margin:12px 0;background:var(--panel)}
+details.more>summary{cursor:pointer;padding:13px 16px;font-weight:700;list-style:none;display:flex;align-items:center;gap:8px}
+details.more>summary::before{content:"▸";transition:transform .15s;color:var(--muted)} details.more[open]>summary::before{transform:rotate(90deg)}
+details.more>summary::-webkit-details-marker{display:none} .more-body{padding:0 18px 14px}
+.flow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.foot{max-width:1240px;margin:0 auto;padding:0 24px 60px;color:var(--muted);font-size:14px}
+.foot .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px 26px;box-shadow:var(--shadow)}
+.foot h3{margin:0 0 8px;color:var(--text);font-size:17px} .foot ul{margin:6px 0 14px;padding-left:1.2em}
+.next{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0 0}
+.btn{display:inline-flex;gap:8px;align-items:center;text-decoration:none;font-weight:700;padding:10px 16px;border-radius:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}
+.btn.ghost{background:var(--panel);color:var(--text);border:1px solid var(--line)}
+#lb{position:fixed;inset:0;background:rgba(5,8,18,.88);display:none;align-items:center;justify-content:center;z-index:100;cursor:zoom-out;padding:24px}
+#lb.on{display:flex} #lb img{max-width:min(96vw,1500px);max-height:94vh;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.skip{position:absolute;left:-999px;top:8px;background:#fff;color:#000;padding:8px 12px;border-radius:8px;z-index:200} .skip:focus{left:8px}
+@media (max-width:1020px){
+  .layout{grid-template-columns:1fr;gap:12px;padding:14px 14px 60px}
+  .toc{position:sticky;top:0;z-index:40;max-height:none;display:flex;gap:6px;overflow-x:auto;padding:8px;margin:0 -14px;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .toc-t,.toc .sep{display:none} .toc a{flex:none;padding:6px 10px;font-size:13.5px;white-space:nowrap}
+  .step{padding:20px 16px} .grid2{grid-template-columns:1fr} .hero{padding:30px 16px} .overview{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .diagram{padding:10px} .num{min-width:34px;height:34px}
+}
+@media print{.toc,.progress,.copy,#lb{display:none!important} .layout{display:block} .step{box-shadow:none;break-inside:avoid-page} .hero{background:#fff!important;color:#000} .hero .sub,.chip{color:#000!important} body{background:#fff}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+<noscript><style>.tabpanel[hidden]{display:block!important}</style></noscript>
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+<div class="progress" aria-hidden="true"></div>
+<header class="hero"><div class="hero-in">
+  <span class="eyebrow">LiteLLM 경유 · 게이트웨이</span>
+  <h1>Claude Code → <span style='color:#ffd36b'>LiteLLM</span> → Azure Databricks</h1>
+  <p class="sub">중간에 LiteLLM 게이트웨이를 두면 Databricks credential은 서버에만 남고, 노트북에는 LiteLLM key만 있으면 됩니다. 값 두 개만 바꿔 연결합니다.</p>
+  <div class="chips"><span class="chip">⏱ 약 15분</span><span class="chip">🧪 2026-11-24 실제 실행</span><span class="chip">LiteLLM 1.110.3</span><span class="chip">Claude Code 2.1.331</span></div>
+  <div class="diagram">
+<svg viewBox="0 0 960 236" role="img" aria-label="Claude Code가 LiteLLM을 거쳐 Azure Databricks를 호출하는 구조">
+<style>
+.bx{fill:var(--soft);stroke:var(--line);stroke-width:1.5} .bx.mid{fill:color-mix(in srgb,var(--brand2) 12%,var(--soft));stroke:var(--brand2);stroke-width:2.2}
+.t{fill:var(--text);font:800 19px var(--font)} .s{fill:var(--muted);font:500 14px var(--font)}
+.ar{stroke:var(--brand);stroke-width:3.2;fill:none} .lb{fill:var(--brand);font:800 13.5px var(--font)} .mn{fill:var(--text);font:600 12.5px var(--mono)}
+.pl{fill:var(--panel);stroke:var(--line)} .tk{fill:#ff5a36;font:700 13px var(--font)} .kv{fill:#7c3aed;font:700 13px var(--font)}
+</style>
+<defs><marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker></defs>
+<rect class="bx" x="10" y="26" width="264" height="184" rx="16"/>
+<text x="28" y="62" font-size="26">💻</text><text class="t" x="64" y="60">내 노트북</text>
+<text class="s" x="28" y="88">Claude Code</text>
+<rect class="pl" x="24" y="104" width="236" height="40" rx="10"/><text class="mn" x="34" y="129">BASE_URL = LiteLLM</text>
+<rect class="pl" x="24" y="152" width="236" height="40" rx="10"/><text class="mn" x="34" y="177">AUTH_TOKEN =</text><text class="kv" x="152" y="177">LiteLLM key</text>
+<line class="ar" x1="282" y1="118" x2="356" y2="118" marker-end="url(#a2)"/>
+<text class="lb" x="319" y="100" text-anchor="middle">/v1/messages</text>
+<rect class="bx mid" x="364" y="26" width="232" height="184" rx="16"/>
+<text x="382" y="62" font-size="26">🔀</text><text class="t" x="418" y="60">LiteLLM Proxy</text>
+<text class="s" x="382" y="88">게이트웨이 · 127.0.0.1:4000</text>
+<rect class="pl" x="378" y="104" width="204" height="40" rx="10"/><text class="mn" x="388" y="129">config.yaml · model_list</text>
+<rect class="pl" x="378" y="152" width="204" height="40" rx="10"/><text class="tk" x="388" y="177">🔒 Databricks credential</text>
+<line class="ar" x1="604" y1="118" x2="678" y2="118" marker-end="url(#a2)"/>
+<text class="lb" x="641" y="100" text-anchor="middle">PAT / M2M</text>
+<rect class="bx" x="686" y="26" width="264" height="184" rx="16"/>
+<text x="704" y="62" font-size="26">☁️</text><text class="t" x="740" y="60">Azure Databricks</text>
+<text class="s" x="704" y="88">Foundation Model API</text>
+<rect class="pl" x="700" y="104" width="236" height="28" rx="8"/><text class="mn" x="710" y="123">databricks-claude-opus-5</text>
+<rect class="pl" x="700" y="138" width="236" height="28" rx="8"/><text class="mn" x="710" y="157">databricks-claude-sonnet-5</text>
+<rect class="pl" x="700" y="172" width="236" height="28" rx="8"/><text class="mn" x="710" y="191">databricks-claude-haiku-4-5</text>
+</svg><p class="cap">Claude Code는 <strong>LiteLLM 주소와 key</strong>만 알고, Databricks 토큰은 <strong>LiteLLM 서버 환경변수</strong>에만 있습니다.</p></div>
+</div></header>
+<div class="layout">
+<nav class="toc" aria-label="목차"><div class="toc-t">이 페이지의 순서</div><a href="#s0"><span class="n">0</span><span>언제 LiteLLM을 쓰나</span></a><a href="#s1"><span class="n">1</span><span>준비물</span></a><a href="#s2"><span class="n">2</span><span>서버에 credential 주입</span></a><a href="#s3"><span class="n">3</span><span>model_list 추가</span></a><a href="#s4"><span class="n">4</span><span>서버 (재)시작</span></a><a href="#s5"><span class="n">5</span><span>LiteLLM 경유 API 검증</span></a><a href="#s6"><span class="n">6</span><span>Claude Code 값 2개 교체</span></a><a href="#s7"><span class="n">7</span><span>Claude Code 확인</span></a><a href="#s8"><span class="n">8</span><span>요청 경로 확인 (로그)</span></a><div class="sep"></div><a href="#s9"><span class="n">?</span><span>문제 해결</span></a><a href="#s10"><span class="n">🧹</span><span>정리</span></a></nav>
+<main id="main">
+<div class="overview"><a class="ov" href="#s2"><span class="k">STEP 2</span><b>credential 주입</b><span>서버 환경변수에만 저장</span></a><a class="ov" href="#s3"><span class="k">STEP 3</span><b>model_list</b><span>Databricks Claude 5개 추가</span></a><a class="ov" href="#s4"><span class="k">STEP 4</span><b>(재)시작</b><span>모델 목록이 보이면 성공</span></a><a class="ov" href="#s5"><span class="k">STEP 5</span><b>API 검증</b><span>LiteLLM key로 호출</span></a><a class="ov" href="#s6"><span class="k">STEP 6</span><b>값 2개 교체</b><span>BASE_URL · AUTH_TOKEN</span></a><a class="ov" href="#s8"><span class="k">STEP 8</span><b>로그 확인</b><span>LiteLLM을 지나갔는지</span></a></div>
+<p class='hint'>🎬 영상은 화면에 들어오면 자동 재생됩니다(무음) · ⏩는 빨리 감기 · 이미지를 클릭하면 크게 볼 수 있어요.</p>
+<section class="step" id="s0"><header class="step-head"><span class="num">0</span><div><h2>언제 LiteLLM을 사이에 두나요?</h2><p class="lead">개인이 빠르게 붙일 때는 <a href="databricks-direct.html">직접 연결</a>이 가장 단순합니다. 팀·조직이 <strong>키·모델·로그를 한곳에서 관리</strong>하려면 LiteLLM을 둡니다.</p></div></header><div class="table-wrap"><table class=""><thead><tr><th></th><th>직접 연결</th><th>LiteLLM 경유 (이 페이지)</th></tr></thead><tbody><tr><td>Claude Code <code>ANTHROPIC_BASE_URL</code></td><td>Databricks <code>/serving-endpoints/anthropic</code></td><td><strong>LiteLLM URL</strong></td></tr><tr><td>Claude Code 토큰</td><td>Databricks PAT / OAuth</td><td><strong>LiteLLM key</strong> (사용자별 virtual key 권장)</td></tr><tr><td>Databricks credential 위치</td><td>사용자 PC마다</td><td><strong>LiteLLM 서버에만</strong></td></tr><tr><td>모델 이름</td><td><code>databricks-claude-*</code></td><td><strong>같은 이름을 alias로 유지</strong> → picker 설정 변경 불필요</td></tr><tr><td>이럴 때</td><td>개인 검증, 가장 단순</td><td>중앙 인증·예산·로그·여러 provider 통합</td></tr></tbody></table></div><aside class="callout info"><div class="ico" aria-hidden="true">💡</div><div><strong class="ct">이 실습의 LiteLLM은 노트북의 Docker 컨테이너입니다</strong><p>회사가 이미 LiteLLM 서버(<code>https://&lt;litellm-host&gt;</code>)를 운영한다면 서버 설치는 건너뛰고 <strong>2~4단계는 서버 관리자 작업, 6단계 이후는 사용자 작업</strong>으로 보세요. 이 페이지의 <code>http://127.0.0.1:4000</code>을 서버 주소로 바꾸면 동일합니다.</p></div></aside></section>
+<section class="step" id="s1"><header class="step-head"><span class="num">1</span><div><h2>준비물</h2><p class="lead">Databricks 접속 정보 3가지와 LiteLLM을 실행할 곳이 필요합니다.</p></div></header><div class="table-wrap"><table class=""><thead><tr><th>준비</th><th>내용</th><th>비고</th></tr></thead><tbody><tr><td>Databricks 접속 정보</td><td>Workspace URL · Token(PAT) · Model ID</td><td><a href="databricks-direct.html#s2">직접 연결 가이드의 1~2단계</a>에서 만든 값을 그대로 사용 (PAT scope: <code>model-serving</code> + <code>Read + Write</code>)</td></tr><tr><td>LiteLLM 서버</td><td>이미 있으면 URL과 key만 확인</td><td>실습: Docker 이미지 <code>ghcr.io/berriai/litellm:main-stable</code> (<strong>LiteLLM 1.110.3</strong>)</td></tr><tr><td>Docker</td><td><code>docker version</code></td><td>실습: Colima (macOS). Colima는 <strong>홈 디렉터리 아래</strong> 경로만 컨테이너에 마운트합니다</td></tr><tr><td>Claude Code</td><td><code>claude --version</code></td><td>실습: 2.1.331</td></tr></tbody></table></div><aside class="callout tip"><div class="ico" aria-hidden="true">✨</div><div><strong class="ct">Docker 대신 pip로도 실행할 수 있습니다</strong><div class="code"><div class="code-head"><span class="lang">bash</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code>python3 -m venv ~/.venvs/litellm &amp;&amp; source ~/.venvs/litellm/bin/activate
+python -m pip install --upgrade 'litellm[proxy]'
+litellm --config config.yaml --host 127.0.0.1 --port 4000</code></pre></div><p>이 페이지의 영상은 Docker 이미지로 검증했습니다. pip 방식은 <a href="https://docs.litellm.ai/docs/proxy/configs" target="_blank" rel="noopener">LiteLLM 공식 문서</a>를 따르세요.</p></div></aside></section>
+<section class="step" id="s2"><header class="step-head"><span class="num">2</span><div><h2>서버에 Databricks credential 넣기</h2><p class="lead">Databricks 토큰은 <strong>LiteLLM 서버 프로세스의 환경변수</strong>로만 주입합니다. <code>config.yaml</code>·이미지·Git에 쓰지 않습니다.</p></div></header><div class="table-wrap"><table class=""><thead><tr><th>용도</th><th>인증 방식</th><th>설정할 환경변수</th></tr></thead><tbody><tr><td>운영</td><td>OAuth M2M (권장)</td><td><code>DATABRICKS_CLIENT_ID</code>, <code>DATABRICKS_CLIENT_SECRET</code></td></tr><tr><td>빠른 검증 (이 실습)</td><td>PAT</td><td><code>DATABRICKS_API_KEY</code></td></tr><tr><td>공통</td><td>workspace 주소</td><td><code>DATABRICKS_API_BASE=https://&lt;workspace-host&gt;/serving-endpoints</code></td></tr></tbody></table></div><div class="code"><div class="code-head"><span class="lang">env</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code><span class="c"># 서버 프로세스(컨테이너)의 환경변수로 전달 — 4단계의 docker run -e 옵션</span>
+DATABRICKS_API_BASE=https://&lt;workspace-host&gt;/serving-endpoints
+DATABRICKS_API_KEY=&lt;databricks-pat&gt;</code></pre></div><aside class="callout warn"><div class="ico" aria-hidden="true">⚠️</div><div><strong class="ct">알아둘 점</strong><ul class=""><li><code>DATABRICKS_API_BASE</code>에는 <code>/anthropic</code>, <code>/v1/messages</code>, <code>/chat/completions</code>를 <strong>붙이지 않습니다</strong>. LiteLLM이 경로를 추가합니다.</li><li>LiteLLM의 인증 선택 순서는 <strong>OAuth M2M → PAT → SDK 기본 인증</strong>입니다. 둘을 함께 넣으면 M2M이 사용됩니다.</li><li>운영에서는 기존 Secret 관리 방식(Key Vault, Kubernetes Secret 등)을 사용하세요.</li></ul></div></aside></section>
+<section class="step" id="s3"><header class="step-head"><span class="num">3</span><div><h2><code>model_list</code>에 Databricks Claude 추가</h2><p class="lead"><code>model_name</code>은 <strong>Claude Code가 보내는 이름</strong>, <code>litellm_params.model</code>은 LiteLLM이 Databricks로 보낼 <strong>backend 이름</strong>입니다.</p></div></header><div class="code"><div class="code-head"><span class="lang">config.yaml</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code>model_list:
+<span class="c">  # 기존 모델은 그대로 유지합니다.</span>
+
+  - model_name: databricks-claude-opus-5
+    litellm_params:
+      model: databricks/databricks-claude-opus-5
+      api_base: os.environ/DATABRICKS_API_BASE
+
+  - model_name: databricks-claude-opus-4-8
+    litellm_params:
+      model: databricks/databricks-claude-opus-4-8
+      api_base: os.environ/DATABRICKS_API_BASE
+
+  - model_name: databricks-claude-sonnet-5
+    litellm_params:
+      model: databricks/databricks-claude-sonnet-5
+      api_base: os.environ/DATABRICKS_API_BASE
+
+  - model_name: databricks-claude-sonnet-4-6
+    litellm_params:
+      model: databricks/databricks-claude-sonnet-4-6
+      api_base: os.environ/DATABRICKS_API_BASE
+
+  - model_name: databricks-claude-haiku-4-5
+    litellm_params:
+      model: databricks/databricks-claude-haiku-4-5
+      api_base: os.environ/DATABRICKS_API_BASE
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY      # 기존 설정은 변경하지 않습니다</code></pre></div><ul class=""><li>기존 <code>model_list</code> 항목과 <code>general_settings</code>·<code>router_settings</code>·callback·budget 설정은 <strong>그대로 두고</strong> 필요한 항목만 병합합니다.</li><li>인증정보는 2단계의 환경변수에서 읽으므로 YAML에 <code>api_key</code>를 넣을 필요가 없습니다.</li><li><code>model_name</code>에 <strong><code>[1m]</code>을 붙이지 않습니다.</strong> Claude Code가 <code>databricks-claude-opus-5[1m]</code>을 선택해도 <code>[1m]</code>을 떼고 LiteLLM에 보냅니다.</li><li>workspace에서 호출할 수 없는 모델은 등록하지 마세요.</li></ul><aside class="callout warn"><div class="ico" aria-hidden="true">⚠️</div><div><strong class="ct"><code>store_model_in_db: true</code>인 서버라면</strong><p>YAML과 데이터베이스에 같은 <code>model_name</code>을 중복 등록하면 두 deployment가 load balancing 대상이 됩니다. 한 곳에서만 관리하세요.</p></div></aside></section>
+<section class="step" id="s4"><header class="step-head"><span class="num">4</span><div><h2>서버 (재)시작 → 모델 목록 확인<span class="badge-ok">실행 검증</span></h2><p class="lead"><strong>Before</strong>: 모델이 없는 기존 서버(<code>data: []</code>) → <strong>After</strong>: credential과 설정을 넣고 재시작하면 Databricks 모델 5개가 보입니다.</p></div></header><div class="code"><div class="code-head"><span class="lang">bash</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code><span class="c"># (1) 기존 서버: master key만 있는 config.yaml</span>
+LITELLM_KEY="sk-$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+
+docker run -d --name litellm -p 127.0.0.1:4000:4000 \
+  -v "$PWD/config.yaml:/app/config.yaml" \
+  -e LITELLM_MASTER_KEY="$LITELLM_KEY" \
+  ghcr.io/berriai/litellm:main-stable --config /app/config.yaml --port 4000
+
+until curl -sf http://127.0.0.1:4000/health/liveliness &gt; /dev/null; do sleep 2; done; echo "LiteLLM is up"
+curl -s http://127.0.0.1:4000/v1/models -H "Authorization: Bearer $LITELLM_KEY" | python3 -m json.tool      # → "data": []</code></pre></div><div class="code"><div class="code-head"><span class="lang">bash</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code><span class="c"># (2) Databricks 추가: 3단계의 config.yaml로 교체 + credential 환경변수 → 재시작</span>
+export DATABRICKS_HOST="https://&lt;workspace-host&gt;"
+export DATABRICKS_TOKEN="&lt;databricks-pat&gt;"
+
+docker rm -f litellm
+docker run -d --name litellm -p 127.0.0.1:4000:4000 \
+  -v "$PWD/config.yaml:/app/config.yaml" \
+  -e LITELLM_MASTER_KEY="$LITELLM_KEY" \
+  -e DATABRICKS_API_BASE="$DATABRICKS_HOST/serving-endpoints" \
+  -e DATABRICKS_API_KEY="$DATABRICKS_TOKEN" \
+  ghcr.io/berriai/litellm:main-stable --config /app/config.yaml --port 4000
+
+until curl -sf http://127.0.0.1:4000/health/liveliness &gt; /dev/null; do sleep 2; done; echo "LiteLLM is up"
+curl -s http://127.0.0.1:4000/v1/models -H "Authorization: Bearer $LITELLM_KEY" \
+  | python3 -c 'import sys,json; [print(m["id"]) for m in json.load(sys.stdin)["data"]]'</code></pre></div><figure class="media video"><div class="vwrap" style="aspect-ratio:1048/1180"><video data-auto muted playsinline controls preload="metadata" width="1048" height="1180" poster="assets/img/poster-l-01-server.webp" aria-label="기존 서버(`data: []`) → Databricks 추가·재시작 → 모델 5개 표시 (대기 구간은 ⏩)"><source src="assets/videos/l-01-server.mp4" type="video/mp4"></video></div><figcaption><span class="tag play">▶ 영상</span>기존 서버(<code>data: []</code>) → Databricks 추가·재시작 → 모델 5개 표시 (대기 구간은 ⏩)<span class="dur">45초</span></figcaption></figure><div class="done"><div class="done-t">✅ 완료 기준</div><ul><li><code>/health/liveliness</code>가 응답하고</li><li><code>/v1/models</code>에 <code>databricks-claude-*</code> <strong>5개</strong>가 나열됨</li></ul></div><aside class="callout warn"><div class="ico" aria-hidden="true">⚠️</div><div><strong class="ct">운영 서버는 rolling restart로</strong><p>단일 인스턴스를 바로 재시작하면 사용 중인 요청이 끊깁니다. 기존 운영 절차(rolling restart, maintenance window)를 따르고, 변경 전 <code>config.yaml</code>·환경변수·DB를 백업하세요.</p></div></aside></section>
+<section class="step" id="s5"><header class="step-head"><span class="num">5</span><div><h2>LiteLLM 경유 API 검증<span class="badge-ok">실행 검증</span></h2><p class="lead">Claude Code가 보내는 것과 같은 <strong>Anthropic Messages</strong> 요청을 LiteLLM key로 직접 보내 봅니다.</p></div></header><div class="code"><div class="code-head"><span class="lang">bash</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code>curl -sS http://127.0.0.1:4000/v1/messages \
+  -H "Authorization: Bearer $LITELLM_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model":"databricks-claude-opus-5","max_tokens":64,"messages":[{"role":"user","content":"Reply with exactly: LITELLM OK"}]}' \
+  | python3 -c 'import sys,json; d=json.load(sys.stdin); print("type       :", d["type"]); print("stop_reason:", d["stop_reason"]); print("text       :", "".join(b.get("text", "") for b in d["content"]))'</code></pre></div><figure class="media video"><div class="vwrap" style="aspect-ratio:1048/802"><video data-auto loop muted playsinline controls preload="metadata" width="1048" height="802" poster="assets/img/poster-l-02-verify.webp" aria-label="LiteLLM `/v1/messages` → Databricks → `type: message`"><source src="assets/videos/l-02-verify.mp4" type="video/mp4"></video></div><figcaption><span class="tag play">▶ 영상</span>LiteLLM <code>/v1/messages</code> → Databricks → <code>type: message</code><span class="dur">15초</span></figcaption></figure><div class="done"><div class="done-t">✅ 완료 기준</div><ul><li>응답 최상위 <code>type</code>이 <strong><code>message</code></strong></li><li><code>text</code>에 <code>LITELLM OK</code> (LiteLLM · Databricks · alias가 모두 연결됨)</li></ul></div><aside class="callout tip"><div class="ico" aria-hidden="true">✨</div><div><strong class="ct"><code>max_tokens</code>는 64 이상으로 — 실제로 확인한 차이</strong><p>LiteLLM을 거치면 Opus 5가 <code>thinking</code> 블록을 먼저 만들고 그다음 <code>text</code>를 만듭니다. <code>max_tokens: 16</code>이면 thinking에 토큰을 다 써서 <code>stop_reason: max_tokens</code>로 끝나고 <code>text</code>가 비어 보일 수 있습니다 (직접 호출은 <code>thinking</code> 없이 바로 <code>text</code>).</p></div></aside><aside class="callout info"><div class="ico" aria-hidden="true">💡</div><div><strong class="ct">모델별 virtual key를 쓰는 서버라면</strong><p>해당 key에 위 alias(<code>databricks-claude-*</code>)를 허용했는지도 확인하세요. (virtual key 발급은 LiteLLM의 데이터베이스가 필요하며, 이 실습은 master key로 검증했습니다.)</p></div></aside></section>
+<section class="step" id="s6"><header class="step-head"><span class="num">6</span><div><h2>Claude Code 설정에서 <strong>값 두 개만</strong> 교체<span class="badge-ok">실행 검증</span></h2><p class="lead">기존 <code>~/.claude/settings.json</code>의 <code>ANTHROPIC_DEFAULT_*</code> picker 값은 그대로 두고 아래 두 값만 바꿉니다.</p></div></header><div class="table-wrap"><table class=""><thead><tr><th>키</th><th>직접 연결 (이전)</th><th>LiteLLM 경유 (이후)</th></tr></thead><tbody><tr><td><code>ANTHROPIC_BASE_URL</code></td><td><code>https://&lt;workspace-host&gt;/serving-endpoints/anthropic</code></td><td><code>https://&lt;litellm-host&gt;</code>  (실습: <code>http://127.0.0.1:4000</code>)</td></tr><tr><td><code>ANTHROPIC_AUTH_TOKEN</code></td><td>Databricks PAT / OAuth token</td><td><strong>LiteLLM key</strong> (Databricks token이 아님)</td></tr></tbody></table></div><div class="code"><div class="code-head"><span class="lang">bash</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code>python3 - &lt;&lt;'PY'
+import json, pathlib
+p = pathlib.Path.home() / ".claude" / "settings.json"
+d = json.loads(p.read_text())
+d["env"]["ANTHROPIC_BASE_URL"] = "http://127.0.0.1:4000"   # 서버 주소 (/v1/messages 제외)
+d["env"]["ANTHROPIC_AUTH_TOKEN"] = "&lt;litellm-key&gt;"
+p.write_text(json.dumps(d, indent=2))
+PY
+
+grep -E 'ANTHROPIC_(BASE_URL|AUTH_TOKEN)' ~/.claude/settings.json</code></pre></div><figure class="media video"><div class="vwrap" style="aspect-ratio:1048/886"><video data-auto loop muted playsinline controls preload="metadata" width="1048" height="886" poster="assets/img/poster-l-03-settings-swap.webp" aria-label="`settings.json`의 두 값만 교체 (이전 → 이후)"><source src="assets/videos/l-03-settings-swap.mp4" type="video/mp4"></video></div><figcaption><span class="tag play">▶ 영상</span><code>settings.json</code>의 두 값만 교체 (이전 → 이후)<span class="dur">11초</span></figcaption></figure><ul class=""><li><code>CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1</code>은 Databricks·LiteLLM 조합을 검증하는 동안 유지합니다. <code>permissions.deny</code>의 <code>WebSearch</code>도 그대로 둡니다.</li><li>에디터로 직접 두 값을 고쳐도 됩니다. JSON 전체를 덮어쓰지 말고 키만 바꾸세요.</li></ul><aside class="callout err"><div class="ico" aria-hidden="true">🛑</div><div><strong class="ct"><code>configure_claude_code.py</code>를 다시 실행하지 마세요</strong><p>이 도구는 Databricks 직접 연결용이라 다시 실행하면 base URL과 token이 <strong>Databricks 값으로 되돌아갑니다</strong>.</p></div></aside><aside class="callout info"><div class="ico" aria-hidden="true">💡</div><div><strong class="ct">정적 key 대신 vault에서 key를 발급한다면</strong><p><code>ANTHROPIC_AUTH_TOKEN</code>을 저장하지 말고 Claude Code의 <code>apiKeyHelper</code>를 사용하세요. VS Code extension은 <code>claudeCode.environmentVariables</code>에도 같은 URL과 key를 따로 넣어야 합니다.</p></div></aside></section>
+<section class="step" id="s7"><header class="step-head"><span class="num">7</span><div><h2>Claude Code에서 최종 확인<span class="badge-ok">실행 검증</span></h2><p class="lead">Claude Code를 <strong>완전히 종료한 뒤</strong> 새 터미널에서 실행합니다.</p></div></header><div class="code"><div class="code-head"><span class="lang">bash</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code>claude --model "databricks-claude-opus-5[1m]" \
+  -p "Reply with exactly: CLAUDE CODE VIA LITELLM OK" \
+  --output-format json</code></pre></div><figure class="media video"><div class="vwrap" style="aspect-ratio:1048/550"><video data-auto loop muted playsinline controls preload="metadata" width="1048" height="550" poster="assets/img/poster-l-04-claude-verify.webp" aria-label="`claude -p` → LiteLLM → Databricks 응답"><source src="assets/videos/l-04-claude-verify.mp4" type="video/mp4"></video></div><figcaption><span class="tag play">▶ 영상</span><code>claude -p</code> → LiteLLM → Databricks 응답<span class="dur">12초</span></figcaption></figure><figure class="media video"><div class="vwrap" style="aspect-ratio:1048/886"><video data-auto loop muted playsinline controls preload="metadata" width="1048" height="886" poster="assets/img/poster-l-05-interactive.webp" aria-label="`/status`에서 base URL이 LiteLLM임을 확인하고, 파일을 읽는 실제 작업까지 실행"><source src="assets/videos/l-05-interactive.mp4" type="video/mp4"></video></div><figcaption><span class="tag play">▶ 영상</span><code>/status</code>에서 base URL이 LiteLLM임을 확인하고, 파일을 읽는 실제 작업까지 실행<span class="dur">14초</span></figcaption></figure><figure class="media"><a class="zoom" href="assets/img/term-status-litellm.webp" aria-label="크게 보기: Claude Code /status 화면. Anthropic base URL이 http://127.0.0.1:4000"><img src="assets/img/term-status-litellm.webp" alt="Claude Code /status 화면. Anthropic base URL이 http://127.0.0.1:4000" width="1700" height="1437" loading="lazy" decoding="async"></a><figcaption><span class="tag">🖼 터미널</span><code>/status</code> — <strong>Anthropic base URL</strong>이 LiteLLM 주소로 바뀜</figcaption></figure><figure class="media"><a class="zoom" href="assets/img/term-answer-litellm.webp" aria-label="크게 보기: LiteLLM을 거쳐 Claude Code가 scripts 폴더를 읽고 설명하는 화면"><img src="assets/img/term-answer-litellm.webp" alt="LiteLLM을 거쳐 Claude Code가 scripts 폴더를 읽고 설명하는 화면" width="1700" height="1437" loading="lazy" decoding="async"></a><figcaption><span class="tag">🖼 터미널</span>LiteLLM을 거쳐도 파일 읽기(tool use)까지 정상</figcaption></figure><div class="done"><div class="done-t">✅ 완료 기준</div><ul><li><code>/status</code>의 <strong>Anthropic base URL</strong>이 LiteLLM URL</li><li><code>claude --model "databricks-claude-opus-5[1m]"</code> 테스트가 성공 (<code>is_error</code> <code>false</code>, <code>modelUsage</code>에 선택한 alias)</li><li>5개 모델(<code>opus-5</code>·<code>opus-4-8</code>·<code>sonnet-5</code>·<code>sonnet-4-6</code>·<code>haiku-4-5</code>) 모두 성공 — 실제로 확인</li></ul></div><aside class="callout tip"><div class="ico" aria-hidden="true">✨</div><div><strong class="ct">5개 모델 일괄 확인</strong><div class="code"><div class="code-head"><span class="lang">bash</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code>for model in "databricks-claude-opus-5[1m]" "databricks-claude-opus-4-8[1m]" "databricks-claude-sonnet-5[1m]" "databricks-claude-sonnet-4-6[1m]" "databricks-claude-haiku-4-5"; do
+  claude --model "$model" -p "Reply with exactly: ${model} OK" --output-format json
+done</code></pre></div></div></aside><aside class="callout warn"><div class="ico" aria-hidden="true">⚠️</div><div><strong class="ct">비-Anthropic 경로 주의</strong><p>LiteLLM이 요청을 변환·전달하는 구조이므로, tool use·thinking·이미지처럼 <strong>실제로 쓸 기능은 각각 검증</strong>한 뒤 사용자에게 공개하세요.</p></div></aside></section>
+<section class="step" id="s8"><header class="step-head"><span class="num">8</span><div><h2>요청이 LiteLLM을 지나갔는지 확인<span class="badge-ok">실행 검증</span></h2><p class="lead">서버 로그에 Claude Code의 요청이 찍히면, 노트북 → LiteLLM → Databricks 경로가 맞는 것입니다.</p></div></header><div class="code"><div class="code-head"><span class="lang">bash</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code>docker logs litellm 2&gt;&amp;1 | grep "POST /v1/messages" | tail -n 6</code></pre></div><figure class="media video"><div class="vwrap" style="aspect-ratio:1048/592"><video data-auto loop muted playsinline controls preload="metadata" width="1048" height="592" poster="assets/img/poster-l-06-logs.webp" aria-label="LiteLLM 로그: `POST /v1/messages … 200 OK`"><source src="assets/videos/l-06-logs.mp4" type="video/mp4"></video></div><figcaption><span class="tag play">▶ 영상</span>LiteLLM 로그: <code>POST /v1/messages … 200 OK</code><span class="dur">8초</span></figcaption></figure><p>Claude Code가 보내는 <code>/v1/messages?beta=true</code> 요청이 모두 <code>200 OK</code>로 처리됩니다. 사용량·비용은 LiteLLM Admin UI(DB 사용 시)나 Databricks의 사용량 화면에서 확인할 수 있습니다.</p></section>
+<section class="step" id="s9"><header class="step-head"><span class="num">?</span><div><h2>문제 해결</h2><p class="lead">증상 → 확인할 항목 순서입니다.</p></div></header><div class="table-wrap"><table class=""><thead><tr><th>증상 / 메시지</th><th>확인할 항목</th></tr></thead><tbody><tr><td>LiteLLM <code>401</code></td><td>virtual/master key, <code>Authorization</code> header, key 만료·상태</td></tr><tr><td>Databricks backend <code>401</code> · <code>403 required scopes</code></td><td>서버의 <code>DATABRICKS_API_KEY</code>(또는 M2M) 값, workspace host. PAT는 <strong><code>model-serving</code> + Read + Write</strong> scope</td></tr><tr><td><code>model not found</code></td><td>요청 alias와 <code>model_name</code>의 <strong>정확한 일치</strong>, YAML/DB 중 실제로 적용되는 곳</td></tr><tr><td><code>/v1/models</code>가 비어 있음</td><td>컨테이너를 <strong>재시작</strong>했는지, <code>-v</code> 경로가 맞는지 (Colima는 <code>$HOME</code> 아래만 마운트 — 아니면 <code>config.yaml</code>이 디렉터리로 잡힘)</td></tr><tr><td>응답 <code>text</code>가 비고 <code>stop_reason: max_tokens</code></td><td><code>max_tokens</code>를 64 이상으로 (thinking 토큰이 먼저 소비됨)</td></tr><tr><td>beta 관련 <code>400</code></td><td>Claude Code의 <code>CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1</code></td></tr><tr><td>설정을 바꿨는데 반영되지 않음</td><td><code>store_model_in_db</code>, Admin UI 값, 실제 <code>--config</code> 경로</td></tr><tr><td>기존 모델이 사라짐</td><td><code>model_list</code> 전체를 덮어썼는지, DB 설정 source</td></tr><tr><td><code>403 … rate limit of 0</code></td><td>Databricks 모델·리전, cross-Geo, 권한, 계정 용량</td></tr><tr><td><code>[1m]</code> 모델을 찾지 못함</td><td>LiteLLM alias에서 <code>[1m]</code> 제거, Claude Code 최신 버전</td></tr><tr><td>Claude Code가 여전히 Databricks로 직접 감</td><td><code>settings.json</code>의 <code>ANTHROPIC_BASE_URL</code>, <code>/status</code>, shell 환경변수와의 우선순위(settings가 우선)</td></tr></tbody></table></div></section>
+<section class="step" id="s10"><header class="step-head"><span class="num">🧹</span><div><h2>정리</h2><p class="lead">이 실습에서 만든 것만 지웁니다.</p></div></header><div class="code"><div class="code-head"><span class="lang">bash</span><button class="copy" type="button" aria-label="코드 복사">복사</button></div><pre><code>docker rm -f litellm                      # LiteLLM 컨테이너
+rm -rf ./litellm-gateway                  # 실습용 config.yaml 폴더
+
+<span class="c"># Claude Code 설정을 직접 연결 상태로 되돌리려면 백업(.bak.*)을 복원하거나</span>
+<span class="c"># 6단계의 두 값을 Databricks 값으로 다시 바꿉니다.</span>
+
+<span class="c"># Databricks 토큰 폐기: Settings → Developer → Access tokens → Revoke</span>
+az group delete --name "$RG" --yes --no-wait      # 실습용 resource group (workspace 포함)</code></pre></div><aside class="callout warn"><div class="ico" aria-hidden="true">⚠️</div><div><strong class="ct">key를 공유하지 마세요</strong><p><code>LITELLM_KEY</code>와 Databricks 토큰은 Git·채팅에 붙여넣지 않습니다. 로컬 LiteLLM은 <code>127.0.0.1</code>에만 bind해 외부에서 접근할 수 없게 하세요.</p></div></aside></section>
+</main>
+</div>
+<footer class="foot">
+<div class="card">
+  <h3>이 가이드는 실제로 실행해서 만들었습니다</h3>
+  <p>영상은 실제 명령을 입력하고 실행한 기록입니다. 계정·토큰·key는 가렸고, 오래 걸리는 구간은 ⏩ 표시와 함께 빨리 감았습니다.</p>
+  <div class="table-wrap"><table class=""><thead><tr><th>항목</th><th>실습 환경</th></tr></thead><tbody><tr><td>실행일</td><td>2026-11-24</td></tr><tr><td>LiteLLM</td><td><code>ghcr.io/berriai/litellm:main-stable</code> (1.110.3) · Docker 29.5 (Colima)</td></tr><tr><td>Claude Code</td><td>2.1.331</td></tr><tr><td>Azure Databricks</td><td>Premium workspace · <code>eastus2</code></td></tr><tr><td>호출 확인</td><td>5개 모델 모두 LiteLLM 경유 성공</td></tr></tbody></table></div>
+  <h3>원문 문서</h3>
+  <ul>
+    <li><a href="../existing-litellm-databricks.md">기존 LiteLLM을 통해 Claude Code를 Azure Databricks에 연결하기</a> · <a href="../claude-code-databricks.md">직접 연결</a></li>
+    <li><a href="https://docs.litellm.ai/docs/providers/databricks">LiteLLM Databricks provider</a> · <a href="https://docs.litellm.ai/docs/proxy/configs">LiteLLM proxy configuration</a> · <a href="https://code.claude.com/docs/en/llm-gateway-connect">Claude Code LLM gateway 연결</a> · <a href="https://learn.microsoft.com/azure/databricks/dev-tools/auth/oauth-m2m">Databricks OAuth M2M</a></li>
+  </ul>
+  <div class="next"><a class="btn ghost" href="databricks-direct.html">◂ LiteLLM 없이 직접 연결</a><a class="btn ghost" href="../../README.md">README</a></div>
+</div>
+</footer>
+<script>
+(() => {
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  // copy buttons
+  $$('.code').forEach((box) => {
+    const btn = box.querySelector('.copy'); if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const text = box.querySelector('code').innerText.replace(/\u00a0/g, ' ');
+      try { await navigator.clipboard.writeText(text); } catch (e) {
+        const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove();
+      }
+      btn.textContent = '복사됨 ✓'; btn.classList.add('ok');
+      setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('ok'); }, 1600);
+    });
+  });
+  // tabs
+  $$('[data-tabs]').forEach((t) => {
+    const tabs = $$('[role=tab]', t), panels = $$('[role=tabpanel]', t);
+    tabs.forEach((tab, i) => tab.addEventListener('click', () => {
+      tabs.forEach((x, j) => x.setAttribute('aria-selected', j === i ? 'true' : 'false'));
+      panels.forEach((p, j) => { p.hidden = j !== i; });
+    }));
+  });
+  // lightbox
+  const lb = document.createElement('div'); lb.id = 'lb'; lb.innerHTML = '<img alt="">'; document.body.appendChild(lb);
+  const close = () => lb.classList.remove('on');
+  $$('a.zoom').forEach((a) => a.addEventListener('click', (ev) => { ev.preventDefault(); lb.querySelector('img').src = a.href; lb.querySelector('img').alt = a.querySelector('img').alt; lb.classList.add('on'); }));
+  lb.addEventListener('click', close); addEventListener('keydown', (ev) => { if (ev.key === 'Escape') close(); });
+  // autoplay videos only while visible
+  const vio = new IntersectionObserver((es) => es.forEach((en) => {
+    const v = en.target;
+    if (en.isIntersecting && en.intersectionRatio >= 0.3) { if (v.ended) v.currentTime = 0; v.play().catch(() => {}); } else v.pause();
+  }), { threshold: [0, 0.3, 1] });
+  $$('video[data-auto]').forEach((v) => vio.observe(v));
+  // toc highlight + progress bar
+  const links = $$('.toc a[href^="#"]'); const secs = links.map((a) => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const bar = document.querySelector('.progress');
+  const onScroll = () => {
+    const h = document.documentElement; bar.style.width = (h.scrollTop / (h.scrollHeight - h.clientHeight) * 100) + '%';
+    let cur = secs[0]; secs.forEach((s) => { if (s.getBoundingClientRect().top < innerHeight * 0.35) cur = s; });
+    links.forEach((a) => a.classList.toggle('on', cur && a.getAttribute('href') === '#' + cur.id));
+  };
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+})();
+</script>
+</body>
+</html>

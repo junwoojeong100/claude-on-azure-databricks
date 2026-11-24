@@ -51,9 +51,11 @@ claude --version
 
 1. Azure Databricks workspace에서 사용자 이름 → **Settings**
 2. **Developer** → **Access tokens** 옆 **Manage**
-3. **Generate new token**에서 이름, 유효 기간, 필요한 API scope 지정
+3. **Generate new token**에서 이름, 유효 기간, scope 지정
+   (**Other APIs → Add scope → `model-serving` → 권한 `Read + Write`**)
 4. 생성 직후 표시되는 token을 안전한 위치에 복사
 
+`model-serving-inference` 또는 `Read` 권한만 선택하면 Claude 호출이 `403`으로 거부됩니다.
 PAT 메뉴가 없거나 생성이 거부되면 workspace 관리자에게 정책을 확인하세요.
 
 ## 2. Databricks API부터 검증
@@ -414,6 +416,7 @@ credential을 읽어야 하므로 VS Code 사용자 settings의 `claudeCode.envi
 | 단계 또는 증상 | 확인할 항목 |
 | --- | --- |
 | 직접 API 호출도 `401` | PAT/OAuth token, workspace host, token이 같은 workspace용인지 |
+| `403 ... required scopes: model-serving` 또는 `[model-serving:read] ... POST` | PAT scope를 `model-serving`의 `Read + Write`로 다시 발급 |
 | 직접 API는 성공하고 Claude Code만 실패 | `/status`, 환경변수 충돌, Claude Code 버전 |
 | beta 관련 `400` | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
 | `web_search_*` 관련 `400` | `permissions.deny`의 `WebSearch` |
