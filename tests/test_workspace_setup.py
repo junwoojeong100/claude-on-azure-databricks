@@ -81,7 +81,7 @@ def run_workspace_setup_without_venv(
             "    printf '%s\\n' '{\"token_value\":\"dapi-test-token\"}' ;;\n"
             "  */api/2.0/serving-endpoints)\n"
             "    payload='"
-            '{"endpoints":[{"name":"databricks-claude-opus-5",'
+            '{"endpoints":[{"name":"databricks-claude-opus-5-5",'
             '"state":{"ready":"READY"}}]}'
             "'\n"
             '    if [ "$write_out" = "%{http_code}" ]; then\n'
@@ -156,7 +156,7 @@ class WorkspaceSetupTests(unittest.TestCase):
         self.assertIn("DATABRICKS_TOKEN=dapi-test-token", env_text)
         self.assertIsNotNone(settings_text)
         self.assertIn(
-            '"model": "databricks-claude-opus-5[1m]"',
+            '"model": "databricks-claude-opus-5-5"',
             settings_text,
         )
         self.assertIn("settings.local.json", result.stdout)

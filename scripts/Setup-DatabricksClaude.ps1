@@ -4,7 +4,7 @@ param(
     [string]$Location = $(if ($env:LOCATION) { $env:LOCATION } else { 'eastus2' }),
     [string]$Workspace = $(if ($env:WORKSPACE) { $env:WORKSPACE } else { 'ws-databricks-claude' }),
     [string]$Sku = $(if ($env:SKU) { $env:SKU } else { 'premium' }),
-    [string]$Endpoint = $(if ($env:DATABRICKS_SERVING_ENDPOINT) { $env:DATABRICKS_SERVING_ENDPOINT } else { 'databricks-claude-opus-5' }),
+    [string]$Endpoint = $(if ($env:DATABRICKS_SERVING_ENDPOINT) { $env:DATABRICKS_SERVING_ENDPOINT } else { 'databricks-claude-opus-5-5' }),
     [string]$FallbackEndpoint = $(if ($env:FALLBACK) { $env:FALLBACK } else { 'databricks-meta-llama-3-3-70b-instruct' }),
     [int]$PatLifetimeSeconds = $(if ($env:PAT_LIFETIME_SECONDS) { [int]$env:PAT_LIFETIME_SECONDS } else { 7776000 }),
     [bool]$RotatePat = ($env:ROTATE_PAT -eq '1'),

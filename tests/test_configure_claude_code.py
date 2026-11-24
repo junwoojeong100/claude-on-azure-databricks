@@ -53,7 +53,7 @@ class ConfigureClaudeCodeTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
-            self.assertEqual(settings["model"], "databricks-claude-opus-5[1m]")
+            self.assertEqual(settings["model"], "databricks-claude-opus-5-5")
             self.assertEqual(
                 settings["env"]["ANTHROPIC_BASE_URL"],
                 "https://adb-1234567890123456.7.azuredatabricks.net"
@@ -62,7 +62,15 @@ class ConfigureClaudeCodeTests(unittest.TestCase):
             self.assertEqual(settings["env"]["ANTHROPIC_AUTH_TOKEN"], "dapi-test-token")
             self.assertEqual(
                 settings["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"],
-                "databricks-claude-sonnet-5[1m]",
+                "databricks-claude-sonnet-5-5",
+            )
+            self.assertEqual(
+                settings["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"],
+                "databricks-claude-haiku-5-5",
+            )
+            self.assertEqual(
+                settings["env"]["ANTHROPIC_DEFAULT_FABLE_MODEL"],
+                "databricks-claude-opus-5",
             )
             self.assertIn("WebSearch", settings["permissions"]["deny"])
             self.assertNotIn("dapi-test-token", result.stdout + result.stderr)

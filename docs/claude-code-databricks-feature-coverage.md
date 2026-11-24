@@ -70,21 +70,24 @@ Claude Code 공식 문서도 CLI, IDE extension, subagents, hooks, commands, ski
 
 ### 1M context의 실제 경계
 
-`databricks-claude-opus-5`, Opus 4.8, Sonnet 5와 Sonnet 4.6은 1M context를 지원합니다.
-그러나 Azure Databricks Enterprise-tier pay-per-token Claude 한도는 다음과 같습니다.
+`databricks-claude-opus-5-5`, `databricks-claude-sonnet-5-5`, `databricks-claude-haiku-5-5`와
+Opus 5, Sonnet 5, Opus 4.8은 1M context를 지원합니다. 그러나 Azure Databricks
+pay-per-token Claude의 기본 한도(2026-11-25 공식 문서)는 다음과 같습니다.
 
 | 제한 | 값 |
 | --- | ---: |
-| Input tokens per minute | 200,000 |
-| Output tokens per minute | 20,000 |
-| Queries per hour | 360,000 |
+| Input tokens per minute | 1,000,000 (Haiku 5.5는 200,000) |
+| Output tokens per minute | 100,000 (Haiku 5.5는 20,000) |
+| Requests per hour | 360,000 |
 | Request payload | 4MB |
-| Workspace queries per second | 200 |
+| Requests per second | 모델별로 다름 (workspace quota에서 확인) |
 
-`[1m]` selector는 Claude Code가 context window를 1M으로 관리하도록 하지만 이 제한을
-해제하지 않습니다. 큰 repository나 병렬 subagent 작업에서는 prompt caching,
-`/compact`, 작은 tool result, 호출 간 backoff를 함께 사용해야 합니다. 지속적인 고부하
-운영은 pay-per-token 대신 provisioned throughput을 검토합니다.
+5.5·5 계열은 Claude Code가 1M context를 자동으로 관리하지만(`[1m]` 접미사 불필요) 이
+한도를 해제하지 않습니다. 요청 payload는 4MB로 제한되고 분당 입력 한도가 1M tokens이므로
+1M-token 요청 한 번이 분당 한도를 거의 모두 소진합니다. 큰 repository나 병렬 subagent
+작업에서는 prompt caching, `/compact`, 작은 tool result, 호출 간 backoff를 함께 사용해야
+합니다. 지속적인 고부하 운영은 pay-per-token 대신 provisioned throughput(또는 quota 상향
+요청)을 검토합니다.
 
 ### 이 저장소의 안전 우선 설정
 

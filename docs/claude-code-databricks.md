@@ -18,8 +18,9 @@ Claude Code
 3. Opus·Sonnet·Haiku 다중 모델 설정을 파일에 저장
 4. 필요한 경우 OAuth 자동 갱신 또는 단일 모델 최소 설정으로 조정
 
-> 공식 문서 확인: 2026-07-27. Opus 5는 Claude Code 2.1.219 이상, Sonnet 5는
-> 2.1.197 이상이 필요합니다.
+> 공식 문서 확인: 2026-11-25. Opus 5.5는 Claude Code 2.1.280 이상, Sonnet 5.5는
+> 2.1.284 이상, Haiku 5.5는 2.1.293 이상이 필요합니다. 세 모델을 모두 쓰려면
+> `claude update`로 2.1.293 이상을 사용하세요.
 
 ## 1. 준비 사항
 
@@ -27,10 +28,10 @@ Claude Code
 | --- | --- |
 | Workspace host | `adb-1234567890123456.7.azuredatabricks.net` |
 | Databricks credential | 빠른 검증은 PAT, 장기 사용자 인증은 OAuth U2M |
-| 호출 가능한 모델 ID 하나 | `databricks-claude-opus-5` |
+| 호출 가능한 모델 ID 하나 | `databricks-claude-opus-5-5` |
 | 로컬 도구 | Git, Python 3.10 이상, 최신 Claude Code |
 
-첫 API 검증에는 모델 하나만 선택하세요. 아래 예시는 현재 기본 모델인 Opus 5를
+첫 API 검증에는 모델 하나만 선택하세요. 아래 예시는 현재 기본 모델인 Opus 5.5를
 사용합니다.
 
 권한:
@@ -68,7 +69,7 @@ Claude Code 설정을 만들기 전에 네이티브 Anthropic API를 직접 호�
 ```bash
 export ANTHROPIC_BASE_URL="https://<workspace-host>/serving-endpoints/anthropic"
 export ANTHROPIC_AUTH_TOKEN="<databricks-token>"
-export DATABRICKS_MODEL="databricks-claude-opus-5"
+export DATABRICKS_MODEL="databricks-claude-opus-5-5"
 
 curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
   -H "Authorization: Bearer $ANTHROPIC_AUTH_TOKEN" \
@@ -82,7 +83,7 @@ curl -sS "$ANTHROPIC_BASE_URL/v1/messages" \
 ```powershell
 $env:ANTHROPIC_BASE_URL = 'https://<workspace-host>/serving-endpoints/anthropic'
 $env:ANTHROPIC_AUTH_TOKEN = '<databricks-token>'
-$env:DATABRICKS_MODEL = 'databricks-claude-opus-5'
+$env:DATABRICKS_MODEL = 'databricks-claude-opus-5-5'
 
 $Body = @{
     model = $env:DATABRICKS_MODEL
@@ -123,7 +124,7 @@ model 값을 제거하거나 Databricks 값으로 바꾸고 Claude Code를 다�
 ```bash
 export CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1
 
-claude --model "databricks-claude-opus-5[1m]" \
+claude --model "databricks-claude-opus-5-5" \
   -p "Reply with exactly: CLAUDE CODE OK" \
   --output-format json
 ```
@@ -133,13 +134,14 @@ claude --model "databricks-claude-opus-5[1m]" \
 ```powershell
 $env:CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = '1'
 
-claude --model 'databricks-claude-opus-5[1m]' `
+claude --model 'databricks-claude-opus-5-5' `
     -p 'Reply with exactly: CLAUDE CODE OK' `
     --output-format json
 ```
 
-`is_error`가 `false`이고 `modelUsage`에 `databricks-claude-opus-5`가 표시되어야
-합니다. 이 모델의 `contextWindow`는 `1000000`이어야 합니다.
+`is_error`가 `false`이고 `modelUsage`에 `databricks-claude-opus-5-5`가 표시되어야
+합니다. 이 모델의 `contextWindow`는 `1000000`이어야 합니다. Claude Code가 모델 이름을
+인식해 1M context를 자동 적용하므로 `[1m]` 접미사는 필요하지 않습니다.
 
 대화형으로 실행한 뒤 `/status`를 열어 실제 routing도 확인합니다.
 
@@ -190,41 +192,48 @@ py -3 scripts\configure_claude_code.py
       "WebSearch"
     ]
   },
-  "model": "databricks-claude-opus-5[1m]",
+  "model": "databricks-claude-opus-5-5",
   "env": {
     "ANTHROPIC_BASE_URL": "https://<workspace-host>/serving-endpoints/anthropic",
     "ANTHROPIC_AUTH_TOKEN": "<databricks-token>",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-5[1m]",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus 5 (1M context)",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "databricks-claude-opus-5-5",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "Opus 5.5 (1M context)",
     "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-4-8[1m]",
-    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 4.8 (1M context)",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "databricks-claude-opus-5",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME": "Opus 5 (1M context)",
     "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION": "Custom Opus model (1M context)",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "databricks-claude-sonnet-5[1m]",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5 (1M context)",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "databricks-claude-sonnet-5-5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "Sonnet 5.5 (1M context)",
     "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION": "Custom Sonnet model (1M context)",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-4-6[1m]",
-    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Sonnet 4.6 (1M context)",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION": "databricks-claude-sonnet-5",
+    "ANTHROPIC_CUSTOM_MODEL_OPTION_NAME": "Sonnet 5 (1M context)",
     "ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION": "Custom Sonnet model (1M context)",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-4-5",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku 4.5 (200K context)",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Custom Haiku model (200K context)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "databricks-claude-haiku-5-5",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME": "Haiku 5.5 (1M context)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION": "Custom Haiku model (1M context)",
     "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS": "1"
   }
 }
 ```
 
 Claude Code가 이름을 지정할 수 있는 custom picker 항목은 하나입니다. 따라서 이 구성은
-`fable` picker 자리를 Opus 4.8에 사용하고, custom option을 Sonnet 4.6에 사용합니다.
-`/model fable`을 입력하면 실제 Fable 5가 아니라 Opus 4.8이 선택됩니다.
+`fable` picker 자리를 Opus 5에 사용하고, custom option을 Sonnet 5에 사용합니다.
+`fable` 별칭은 지정하지 않으면 Fable 5.2로 해석되는데, 기본 workspace에서는 이 모델을
+호출할 수 없어 `There's an issue with the selected model (claude-fable-5-2)`로
+실패합니다. 그래서 `ANTHROPIC_DEFAULT_FABLE_MODEL`로 Opus 5에 고정했고,
+`/model fable`을 입력하면 실제 Fable이 아니라 Opus 5가 선택됩니다.
 
 | Picker 모델 | Claude Code 선택값 | Databricks 모델 ID | `contextWindow` |
 | --- | --- | --- | --- |
-| `Opus 5 (1M context)` | `opus` | `databricks-claude-opus-5` | 1,000,000 |
-| `Opus 4.8 (1M context)` | `fable` | `databricks-claude-opus-4-8` | 1,000,000 |
-| `Sonnet 5 (1M context)` | `sonnet` | `databricks-claude-sonnet-5` | 1,000,000 |
-| `Sonnet 4.6 (1M context)` | custom option | `databricks-claude-sonnet-4-6` | 1,000,000 |
-| `Haiku 4.5 (200K context)` | `haiku` | `databricks-claude-haiku-4-5` | 200,000 |
+| `Opus 5.5 (1M context)` | `opus` | `databricks-claude-opus-5-5` | 1,000,000 |
+| `Opus 5 (1M context)` | `fable` | `databricks-claude-opus-5` | 1,000,000 |
+| `Sonnet 5.5 (1M context)` | `sonnet` | `databricks-claude-sonnet-5-5` | 1,000,000 |
+| `Sonnet 5 (1M context)` | custom option | `databricks-claude-sonnet-5` | 1,000,000 |
+| `Haiku 5.5 (1M context)` | `haiku` | `databricks-claude-haiku-5-5` | 1,000,000 |
+
+이전 구성(Opus 5 · Opus 4.8 · Sonnet 5 · Sonnet 4.6 · Haiku 4.5)으로 설정했다면 같은
+명령을 다시 실행하세요. 기존 파일을 `.bak.<timestamp>`로 백업하고 위 최신 구성으로
+갱신합니다.
 
 Workspace에서 일부 모델만 호출할 수 있다면 해당 `ANTHROPIC_DEFAULT_*` 또는
 `ANTHROPIC_CUSTOM_MODEL_OPTION*` 항목만 제거하세요. 다른 사용자의 설정에는 영향을 주지
@@ -237,11 +246,11 @@ Claude Code를 완전히 종료한 뒤 다시 시작해야 picker 항목이 갱�
 
 ```bash
 models=(
-  "databricks-claude-opus-5[1m]"
-  "databricks-claude-opus-4-8[1m]"
-  "databricks-claude-sonnet-5[1m]"
-  "databricks-claude-sonnet-4-6[1m]"
-  "databricks-claude-haiku-4-5"
+  "databricks-claude-opus-5-5"
+  "databricks-claude-opus-5"
+  "databricks-claude-sonnet-5-5"
+  "databricks-claude-sonnet-5"
+  "databricks-claude-haiku-5-5"
 )
 
 for model in "${models[@]}"; do
@@ -255,11 +264,11 @@ Windows PowerShell:
 
 ```powershell
 $models = @(
-  'databricks-claude-opus-5[1m]'
-  'databricks-claude-opus-4-8[1m]'
-  'databricks-claude-sonnet-5[1m]'
-  'databricks-claude-sonnet-4-6[1m]'
-  'databricks-claude-haiku-4-5'
+  'databricks-claude-opus-5-5'
+  'databricks-claude-opus-5'
+  'databricks-claude-sonnet-5-5'
+  'databricks-claude-sonnet-5'
+  'databricks-claude-haiku-5-5'
 )
 
 $models | ForEach-Object {
@@ -287,7 +296,7 @@ $models | ForEach-Object {
       "WebSearch"
     ]
   },
-  "model": "databricks-claude-opus-5[1m]",
+  "model": "databricks-claude-opus-5-5",
   "env": {
     "ANTHROPIC_BASE_URL": "https://<workspace-host>/serving-endpoints/anthropic",
     "ANTHROPIC_AUTH_TOKEN": "<databricks-token>",
@@ -298,25 +307,32 @@ $models | ForEach-Object {
 
 ## 6. Context window과 요청 한도
 
-`[1m]`은 custom `ANTHROPIC_BASE_URL` 뒤에서 Claude Code가 1M context를 관리하도록 하는
-selector입니다. Claude Code는 selector를 제거한 Databricks 모델 ID를 API에 전송합니다.
+5.5·5 계열 모델은 Claude Code가 `databricks-claude-opus-5-5`처럼 Claude 모델 이름이 들어
+있는 ID를 인식해 1M context를 자동 적용하므로 `[1m]` 접미사가 필요하지 않습니다
+(`modelUsage`의 `contextWindow`가 `1000000`). `[1m]`은 Opus 4.6·Sonnet 4.6처럼
+접미사로만 1M에 도달하는 모델이나 Claude Code가 인식하지 못하는 gateway 모델 ID에만
+사용합니다. Claude Code는 접미사를 제거한 Databricks 모델 ID를 API에 전송합니다.
 
 | Databricks 모델 | 모델 context window |
 | --- | --- |
+| `databricks-claude-opus-5-5` | 1M tokens |
 | `databricks-claude-opus-5` | 1M tokens |
 | `databricks-claude-opus-4-8` | 1M tokens |
 | `databricks-claude-opus-4-7` | 1M tokens |
 | `databricks-claude-opus-4-6` | 1M tokens |
 | `databricks-claude-opus-4-5` | 200K tokens |
+| `databricks-claude-sonnet-5-5` | 1M tokens |
 | `databricks-claude-sonnet-5` | 1M tokens |
 | `databricks-claude-sonnet-4-6` | 1M tokens |
 | `databricks-claude-sonnet-4-5` | 200K tokens |
+| `databricks-claude-haiku-5-5` | 1M tokens |
 | `databricks-claude-haiku-4-5` | 200K tokens |
 
 모델 context window와 Azure Databricks workspace 요청 한도는 별개입니다. 공식
-Enterprise-tier pay-per-token 표의 Claude 한도는 ITPM 200K, OTPM 20K이고 payload
-제한은 4MB입니다. 따라서 1M-token 입력을 한 요청에서 모두 사용할 수 있다고 가정하면
-안 됩니다.
+pay-per-token 표(2026-11-25 확인)의 Claude 기본 한도는 분당 입력 1,000,000 tokens(ITPM),
+분당 출력 100,000 tokens(OTPM), 시간당 360,000 요청이고, Haiku 5.5만 ITPM 200K·OTPM
+20K입니다. 요청 payload 제한은 4MB입니다. 따라서 1M-token 입력을 한 요청에서 모두 사용할
+수 있다고 가정하면 안 됩니다.
 
 ## 7. PAT 대신 OAuth U2M
 
@@ -411,19 +427,56 @@ credential을 읽어야 하므로 VS Code 사용자 settings의 `claudeCode.envi
 않는 extension 배포는 조직에서 갱신된 credential을
 `claudeCode.environmentVariables`에 공급하는 별도 관리 방식이 필요합니다.
 
+## 9. 선택: Unity Gateway 경로
+
+Databricks 문서의 최신 예제는 Unity Gateway 경로를 사용합니다. 같은 모델을
+`https://<workspace-host>/ai-gateway/anthropic`와 `system.ai.<model>` 이름으로도 호출할 수
+있고 Claude Code도 그대로 동작합니다. 이 리포의 설정 도구와 스크립트는 기본 경로
+(`/serving-endpoints/anthropic`)를 사용합니다.
+
+| 경로 | base URL | 모델 이름 | UI에서 만든 PAT의 scope |
+| --- | --- | --- | --- |
+| 기본 | `https://<workspace-host>/serving-endpoints/anthropic` | `databricks-claude-opus-5-5` | `model-serving` (`Read + Write`) |
+| Unity Gateway | `https://<workspace-host>/ai-gateway/anthropic` | `system.ai.claude-opus-5-5` | `ai-gateway` (`Read + Write`) |
+
+```bash
+export DATABRICKS_HOST="https://<workspace-host>"
+export DATABRICKS_TOKEN="<databricks-token>"
+
+curl -sS "$DATABRICKS_HOST/ai-gateway/anthropic/v1/messages" \
+  -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model":"system.ai.claude-opus-5-5","max_tokens":16,"messages":[{"role":"user","content":"Reply with exactly: OK"}]}'
+
+ANTHROPIC_BASE_URL="$DATABRICKS_HOST/ai-gateway/anthropic" ANTHROPIC_AUTH_TOKEN="$DATABRICKS_TOKEN" \
+  claude --model "system.ai.claude-opus-5-5" \
+  -p "Reply with exactly: GATEWAY OK" \
+  --output-format json
+```
+
+`model-serving` scope token으로 Unity Gateway를 호출하면 `403 ... required scopes: ai-gateway`,
+`ai-gateway` scope token으로 기본 경로를 호출하면 `required scopes: model-serving`로
+거부됩니다. CLI로 발급한 scope 없는 PAT는 두 경로 모두 동작합니다. 설정 파일에 저장한
+뒤에는 `~/.claude/settings.json`의 `env`가 shell 환경변수보다 우선하므로 경로를 바꾸려면
+설정 파일의 `ANTHROPIC_BASE_URL`과 모델 ID를 바꾸세요.
+
 ## 문제 해결
 
 | 단계 또는 증상 | 확인할 항목 |
 | --- | --- |
 | 직접 API 호출도 `401` | PAT/OAuth token, workspace host, token이 같은 workspace용인지 |
 | `403 ... required scopes: model-serving` 또는 `[model-serving:read] ... POST` | PAT scope를 `model-serving`의 `Read + Write`로 다시 발급 |
+| `403 ... required scopes: ai-gateway` | Unity Gateway 경로는 PAT scope `ai-gateway`(`Read + Write`)가 필요. 기본 경로는 `model-serving` |
 | 직접 API는 성공하고 Claude Code만 실패 | `/status`, 환경변수 충돌, Claude Code 버전 |
+| `There's an issue with the selected model` | 모델 ID가 READY 목록에 있는지, Claude Code 버전(Opus 5.5 2.1.280 이상, Sonnet 5.5 2.1.284 이상, Haiku 5.5 2.1.293 이상). `fable`은 `ANTHROPIC_DEFAULT_FABLE_MODEL`로 지정 |
 | beta 관련 `400` | `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` |
 | `web_search_*` 관련 `400` | `permissions.deny`의 `WebSearch` |
-| `contextWindow`가 `200000` | 1M 모델 값 끝의 `[1m]`과 Claude Code 재시작 |
+| `contextWindow`가 `200000` | Claude Code를 2.1.293 이상으로 업데이트하고 완전히 재시작. Opus 4.6·Sonnet 4.6처럼 접미사로만 1M이 되는 모델은 값 끝에 `[1m]` |
 | 모델을 찾지 못함 | 실제 모델 ID와 workspace 리전 가용성 |
+| `404 ... Model claude-fable-... is not available in your region` | Fable은 cross-Geo 처리(데이터 거주 설정)가 필요하고 Fable 5.2는 Unity Gateway 전용입니다. 기본 구성은 5.5 모델을 사용 |
 | `403 ... rate limit of 0` | 모델·리전, cross-Geo, `CAN QUERY`/`EXECUTE`, 계정 용량 |
-| 일반적인 사용량 초과 `429` | ITPM, OTPM, QPH와 재시도 간격 |
+| 일반적인 사용량 초과 `429` | ITPM, OTPM, RPH와 재시도 간격 |
 
 ## 공식 문서
 
