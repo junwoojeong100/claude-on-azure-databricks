@@ -83,6 +83,16 @@ class GuidePagesTests(unittest.TestCase):
         self.assertIn("databricks-direct.html", index_links)
         self.assertIn("databricks-litellm.html", index_links)
 
+    def test_existing_litellm_path_is_linked_from_every_entry_point(self) -> None:
+        target = "databricks-litellm.html#existing"
+        self.assertIn("existing", parse("databricks-litellm.html").ids)
+        for name in ("index.html", "databricks-direct.html"):
+            with self.subTest(page=name):
+                references = {reference for _, _, reference in parse(name).refs}
+                self.assertIn(target, references)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(SITE_URL + target, readme)
+
     def test_local_references_and_anchors_resolve(self) -> None:
         checked = 0
         for name in PAGES:

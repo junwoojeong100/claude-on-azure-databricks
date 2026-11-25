@@ -18,7 +18,9 @@ OpenAI Responses API를 변환합니다.
 > [직접 연결](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-direct.html),
 > 있는 경우는
 > [LiteLLM 경유](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-litellm.html)를
-> 따라 하세요. 원본은 [`docs/guide/`](docs/guide/)이며, `main`에 push하면 GitHub Pages가
+> 따라 하세요. 이미 운영 중인 LiteLLM 서버에 Databricks를 추가하는 방법은
+> [기존 LiteLLM 연동](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-litellm.html#existing)에
+> 정리했습니다. 원본은 [`docs/guide/`](docs/guide/)이며, `main`에 push하면 GitHub Pages가
 > 자동으로 다시 배포합니다.
 
 ## 1. 연결 흐름 선택
