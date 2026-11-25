@@ -14,13 +14,15 @@ OpenAI Responses API를 변환합니다.
 > **화면 캡처·영상으로 따라 하기** — 실제 Azure에서 실행한 기록으로 만든 1페이지 HTML
 > 실습 가이드입니다. 브라우저에서 바로 열 수 있습니다:
 > [가이드 목록](https://junwoojeong100.github.io/claude-on-azure-databricks/).
-> 노트북과 Databricks 사이에 LiteLLM이 없는 경우는
+> LiteLLM 없이 바로 연결하려면
 > [직접 연결](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-direct.html),
-> 있는 경우는
+> LiteLLM을 거치려면
 > [LiteLLM 경유](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-litellm.html)를
-> 따라 하세요. 이미 운영 중인 LiteLLM 서버에 Databricks를 추가하는 방법은
-> [기존 LiteLLM 연동](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-litellm.html#existing)에
-> 정리했습니다. 원본은 [`docs/guide/`](docs/guide/)이며, `main`에 push하면 GitHub Pages가
+> 따라 하세요. LiteLLM이 아직 없다면
+> [1단계부터 설치](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-litellm.html#s1)하고,
+> 이미 운영 중인 LiteLLM 서버에는
+> [기존 LiteLLM 연동](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-litellm.html#existing)으로
+> Databricks를 추가합니다. 원본은 [`docs/guide/`](docs/guide/)이며, `main`에 push하면 GitHub Pages가
 > 자동으로 다시 배포합니다.
 
 ## 1. 연결 흐름 선택
@@ -30,6 +32,7 @@ OpenAI Responses API를 변환합니다.
 | 선택 | 목적 | 가이드 |
 | --- | --- | --- |
 | 직접 연결 | 개인 PC의 Claude Code에서 Databricks를 바로 호출 | [Databricks 직접 연결](docs/claude-code-databricks.md) |
+| 새 LiteLLM | 개인 PC에 LiteLLM을 처음 설치해 Databricks를 호출 | [LiteLLM 설치부터 연결](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-litellm.html#s1) |
 | 기존 gateway | 조직의 LiteLLM 서버를 통해 Databricks를 호출 | [기존 LiteLLM에서 Databricks 연결](docs/existing-litellm-databricks.md) |
 | 기능 검토 | Databricks 연결 시 유지되거나 제한되는 Claude Code 기능 확인 | [Claude Code 기능 커버리지](docs/claude-code-databricks-feature-coverage.md) |
 

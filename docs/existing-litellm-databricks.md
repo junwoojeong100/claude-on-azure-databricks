@@ -7,6 +7,8 @@ Databricks 직접 연결을 LiteLLM 경유 방식으로 바꾸려는 경우에 �
 기존 LiteLLM을 사용할 경우 직접 연결 설정을 먼저 저장하지 않습니다. Workspace URL,
 credential, 호출 가능한 모델 ID가 확실하지 않을 때만 직접 연결 가이드의
 [API 검증 절](claude-code-databricks.md#2-databricks-api부터-검증)을 수행하세요.
+LiteLLM이 아직 없다면 이 문서 대신 [LiteLLM 설치부터 연결하는 실습 가이드](https://junwoojeong100.github.io/claude-on-azure-databricks/databricks-litellm.html#s1)를
+1단계부터 따라 하세요.
 
 ```text
 Claude Code
@@ -349,6 +351,33 @@ VS Code extension도 사용한다면 VS Code 사용자 settings의
 
 > **완료 기준:** `/status`의 Anthropic base URL이 조직의 LiteLLM URL이고,
 > `claude --model "databricks-claude-opus-5-5"` 테스트가 성공합니다.
+
+## 되돌리기
+
+연동을 철회할 때는 이 가이드가 추가한 것만 되돌립니다. 기존 서버의 다른 모델, key,
+team 설정과 컨테이너·볼륨은 건드리지 않습니다.
+
+- YAML 서버(관리자): 3절에서 병합한 `databricks-claude-*` 항목을 `model_list`에서 지우고,
+  이 연동에만 쓴 `DATABRICKS_*` 환경변수를 제거한 뒤 rolling restart합니다.
+- DB 서버(관리자): 아래 명령으로 추가한 모델을 삭제합니다. 재시작은 필요 없습니다.
+  Admin UI의 모델 상세 화면에서 **Delete Model**로도 지울 수 있습니다. 이 연동에만 쓴
+  환경변수는 따로 제거합니다.
+- 사용자: 5절의 두 값을 이전 값(직접 연결 값이나 이전 gateway 값)으로 되돌립니다.
+
+```bash
+export LITELLM_BASE_URL="https://<litellm-host>"
+export LITELLM_ADMIN_KEY="<litellm-admin-key>"
+
+# DB 서버: 추가한 databricks-claude-* 항목만 삭제 (YAML 모델은 API로 삭제할 수 없음)
+curl -s "$LITELLM_BASE_URL/model/info" -H "Authorization: Bearer $LITELLM_ADMIN_KEY" \
+  | python3 -c 'import sys,json; [print(m["model_info"]["id"]) for m in json.load(sys.stdin)["data"] if m["model_name"].startswith("databricks-claude-") and m["model_info"].get("db_model")]' \
+  | while read -r id; do
+      curl -sS -o /dev/null -w "$id -> HTTP %{http_code}\n" -X POST "$LITELLM_BASE_URL/model/delete" \
+        -H "Authorization: Bearer $LITELLM_ADMIN_KEY" \
+        -H "Content-Type: application/json" \
+        -d "{\"id\":\"$id\"}"
+    done
+```
 
 ## 문제 해결
 
