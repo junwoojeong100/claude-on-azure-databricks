@@ -362,6 +362,34 @@ class DocumentationTests(unittest.TestCase):
             guide,
         )
 
+    def test_existing_litellm_databricks_covers_database_managed_servers(self) -> None:
+        guide_path = ROOT / "docs" / "existing-litellm-databricks.md"
+        guide = guide_path.read_text(encoding="utf-8")
+
+        for required_text in (
+            "### 데이터베이스로 관리하는 서버: API로 추가",
+            "enforce_rpm_tpm_on_model_add",
+            "### 사용자 key에 새 alias 허용",
+            "model_info",
+            "access_groups",
+            "`models`는 전체 목록을 교체",
+            "/model/info",
+        ):
+            self.assertIn(required_text, guide)
+
+        self.assertLess(
+            guide.index("### 데이터베이스로 관리하는 서버: API로 추가"),
+            guide.index("## 4. LiteLLM 재시작 전후 검증"),
+        )
+        api_blocks = [
+            code
+            for language, code, _ in fenced_blocks(guide_path)
+            if language == "bash" and "/model/new" in code
+        ]
+        self.assertEqual(len(api_blocks), 1)
+        self.assertIn("os.environ/DATABRICKS_API_BASE", api_blocks[0])
+        self.assertNotIn("api_key", api_blocks[0])
+
     def test_existing_litellm_uses_managed_identity_for_foundry(self) -> None:
         guide = (ROOT / "docs" / "existing-litellm-foundry.md").read_text(
             encoding="utf-8"

@@ -1,3 +1,5 @@
+import html
+import json
 import re
 import unittest
 from html.parser import HTMLParser
@@ -75,6 +77,18 @@ def used_assets() -> set[Path]:
     return used
 
 
+def litellm_section(start: str, end: str) -> str:
+    text = (SITE / "databricks-litellm.html").read_text(encoding="utf-8")
+    return text[text.index(start) : text.index(end)]
+
+
+def code_blocks(section: str) -> list[str]:
+    return [
+        html.unescape(re.sub(r"<[^>]+>", "", block))
+        for block in re.findall(r"<pre><code>(.*?)</code></pre>", section, re.DOTALL)
+    ]
+
+
 class GuidePagesTests(unittest.TestCase):
     def test_site_root_has_index_and_both_guides(self) -> None:
         for name in PAGES:
@@ -82,6 +96,91 @@ class GuidePagesTests(unittest.TestCase):
         index_links = {reference for _, _, reference in parse("index.html").refs}
         self.assertIn("databricks-direct.html", index_links)
         self.assertIn("databricks-litellm.html", index_links)
+
+    def test_existing_litellm_path_is_linked_from_every_entry_point(self) -> None:
+        target = "databricks-litellm.html#existing"
+        self.assertIn("existing", parse("databricks-litellm.html").ids)
+        for name in ("index.html", "databricks-direct.html"):
+            with self.subTest(page=name):
+                references = {reference for _, _, reference in parse(name).refs}
+                self.assertIn(target, references)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(SITE_URL + target, readme)
+
+    def test_existing_litellm_section_routes_to_every_step(self) -> None:
+        html = (SITE / "databricks-litellm.html").read_text(encoding="utf-8")
+        section = html[html.index('id="existing"') : html.index('id="s1"')]
+        for step in range(1, 9):
+            with self.subTest(step=step):
+                self.assertIn(f'href="#s{step}"', section)
+        next_steps = section[section.index('id="existing-next"') :]
+        self.assertIn('href="#s1"', next_steps)
+        self.assertIn('href="#s6"', next_steps)
+
+    def test_new_install_path_is_linked_from_every_entry_point(self) -> None:
+        target = "databricks-litellm.html#s1"
+        for name in ("index.html", "databricks-direct.html"):
+            with self.subTest(page=name):
+                references = {reference for _, _, reference in parse(name).refs}
+                self.assertIn(target, references)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(SITE_URL + target, readme)
+
+    def test_start_here_chooser_links_every_starting_point(self) -> None:
+        chooser = litellm_section('id="s0"', 'id="existing"')
+        for target in [f"#s{step}" for step in range(1, 9)] + ["#existing"]:
+            with self.subTest(target=target):
+                self.assertIn(f'href="{target}"', chooser)
+
+    def test_new_install_flow_is_self_contained(self) -> None:
+        config = litellm_section('id="s3"', 'id="s4"')
+        start = litellm_section('id="s4"', 'id="s5"')
+        cleanup = litellm_section('id="s10"', "</main>")
+        self.assertIn("~/litellm-gateway/config.yaml", config)
+        fresh = next(
+            code for code in code_blocks(start) if "mkdir -p ~/litellm-gateway" in code
+        )
+        for required in (
+            "LITELLM_KEY=",
+            "docker run",
+            '-e LITELLM_MASTER_KEY="$LITELLM_KEY"',
+            "-e DATABRICKS_API_BASE",
+            "-e DATABRICKS_API_KEY",
+            "/v1/models",
+            'echo "LiteLLM key:',
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, fresh)
+        self.assertLess(start.index('id="s4-fresh"'), start.index("(1) 기존 서버"))
+        self.assertIn("rm -rf ~/litellm-gateway", cleanup)
+
+    def test_settings_fallback_exists_for_a_missing_settings_file(self) -> None:
+        prerequisites = litellm_section('id="s1"', 'id="s2"')
+        step = litellm_section('id="s6"', 'id="s7"')
+        self.assertIn('href="#s6-nosettings"', prerequisites)
+        fallback = step[step.index('id="s6-nosettings"') :]
+        settings = json.loads(
+            next(code for code in code_blocks(fallback) if code.lstrip().startswith("{"))
+        )
+        self.assertEqual(settings["model"], "databricks-claude-opus-5-5")
+        self.assertEqual(
+            set(settings["env"]),
+            {
+                "ANTHROPIC_BASE_URL",
+                "ANTHROPIC_AUTH_TOKEN",
+                "CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS",
+            },
+        )
+
+    def test_cleanup_does_not_delete_an_existing_server(self) -> None:
+        cleanup = litellm_section('id="s10"', "</main>")
+        self.assertLess(
+            cleanup.index('href="#s10-existing"'), cleanup.index("docker rm -f litellm")
+        )
+        existing = cleanup[cleanup.index('id="s10-existing"') :]
+        self.assertIn("/model/delete", existing)
+        self.assertNotIn("docker rm", existing)
+        self.assertNotIn("az group delete", existing)
 
     def test_local_references_and_anchors_resolve(self) -> None:
         checked = 0
