@@ -93,6 +93,16 @@ class GuidePagesTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn(SITE_URL + target, readme)
 
+    def test_existing_litellm_section_routes_to_every_step(self) -> None:
+        html = (SITE / "databricks-litellm.html").read_text(encoding="utf-8")
+        section = html[html.index('id="existing"') : html.index('id="s1"')]
+        for step in range(1, 9):
+            with self.subTest(step=step):
+                self.assertIn(f'href="#s{step}"', section)
+        next_steps = section[section.index('id="existing-next"') :]
+        self.assertIn('href="#s1"', next_steps)
+        self.assertIn('href="#s6"', next_steps)
+
     def test_local_references_and_anchors_resolve(self) -> None:
         checked = 0
         for name in PAGES:

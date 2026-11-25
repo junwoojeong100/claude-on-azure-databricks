@@ -19,9 +19,10 @@ Claude Code
 > [Claude Code 호환성](https://docs.litellm.ai/docs/claude_code_compatibility)을
 > 확인하고, 기존 `config.yaml`, 환경변수와 데이터베이스를 백업하세요.
 
-작업은 두 역할로 나뉩니다. LiteLLM 관리자는 1~4절(서버에 Databricks 추가), Claude Code
-사용자는 5~6절(값 두 개 교체)을 수행합니다. 서버에 Databricks 모델이 이미 등록되어
-있다면(4절의 `/v1/models`로 확인) 사용자는 5절부터 시작합니다.
+작업은 두 역할로 나뉩니다. LiteLLM 관리자는 1~4절(서버에 Databricks 추가)을 마친 뒤
+[사용자에게 전달](#사용자에게-전달)하고, Claude Code 사용자는 5~6절(값 두 개 교체)을
+수행합니다. 서버에 Databricks 모델이 이미 등록되어 있다면(4절의 `/v1/models`로 확인)
+사용자는 5절부터 시작합니다.
 
 ## 변경 사항 요약
 
@@ -284,10 +285,19 @@ Key나 team에 허용 모델(`models`)이 지정되어 있으면 허용 목록�
 - Key에 모델을 직접 나열했다면 `POST /key/update`의 `models`에 새 alias를 추가합니다.
   `models`는 전체 목록을 교체하므로 기존 모델도 함께 보내야 합니다.
 
+### 사용자에게 전달
+
+4절의 검증이 끝나면 관리자 작업은 끝입니다. 사용자에게 다음 세 가지를 전달하고,
+사용자는 5절부터 이어갑니다.
+
+- LiteLLM URL: `https://<litellm-host>` (`/v1/messages`는 붙이지 않음)
+- 사용자별 virtual key (Databricks token이 아님)
+- 사용할 alias: `databricks-claude-*` (모델 picker 설정은 그대로)
+
 ## 5. Claude Code 설정에서 두 값만 교체
 
 기존 `~/.claude/settings.json`에서 모델 picker 관련 `ANTHROPIC_DEFAULT_*` 값은
-유지하고 다음 두 값만 바꿉니다.
+유지하고 다음 두 값만 바꿉니다. 값은 관리자에게 전달받은 LiteLLM URL과 key입니다.
 
 ```json
 {
